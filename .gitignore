@@ -22,7 +22,13 @@ composer.lock
 .htaccess
 
 # Database exports
-*.sql
+
+# Allow committing the project db and workspace settings explicitly
+!database.sql
+
+# VS Code workspace settings - keep most of .vscode ignored but allow this file
+.vscode/
+!.vscode/settings.json
 
 # PHPStorm
 *.iml
