@@ -1,0 +1,34 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs and runtime
+*.log
+tmp/
+cache/
+
+# Composer
+/vendor/
+composer.lock
+
+# Environment
+.env
+
+# XAMPP / local
+.htaccess
+
+# Database exports
+*.sql
+
+# PHPStorm
+*.iml
+
+# Node
+node_modules/
+
+# Build
+dist/
