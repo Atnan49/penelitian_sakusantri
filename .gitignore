@@ -18,23 +18,32 @@ composer.lock
 # Environment
 .env
 
-# XAMPP / local
-.htaccess
-
-# Database exports
-
-# Allow committing the project db and workspace settings explicitly
-!database.sql
-
-# VS Code workspace settings - keep most of .vscode ignored but allow this file
+# Editors
 .vscode/
+.idea/
 !.vscode/settings.json
 
-# PHPStorm
-*.iml
-
-# Node
-node_modules/
+# OS files
+.DS_Store
+Thumbs.db
 
 # Build
 dist/
+
+# App artifacts
+_backup_*/
+public/uploads/*
+public/assets/uploads/*
+uploads/*
+!public/uploads/.htaccess
+!public/assets/uploads/.htaccess
+# Ignore legacy duplicates and backups
+/login_process.php
+/setup_admin.php
+/wali/**
+public/*.bak
+public/*/*.bak
+public/admin/index.php.bak
+
+# Keep SQL scripts
+!scripts/**/*.sql

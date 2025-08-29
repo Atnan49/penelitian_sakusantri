@@ -1,0 +1,22 @@
+RewriteEngine On
+
+# --- Canonicalization (skip on localhost/private IPs) ---
+RewriteCond %{HTTP_HOST} !^localhost(:\d+)?$ [NC]
+RewriteCond %{HTTP_HOST} !^127\.0\.0\.1(:\d+)?$ [NC]
+RewriteCond %{HTTP_HOST} !^192\.168\..+$ [NC]
+RewriteCond %{HTTP_HOST} !^10\..+$ [NC]
+
+# Force HTTPS (consider reverse proxy)
+RewriteCond %{HTTPS} !=on
+RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Remove leading www.
+RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+RewriteRule ^ https://%1%{REQUEST_URI} [L,R=301]
+
+# --- App routing ---
+# Jika sudah di public, biarkan
+RewriteRule ^public/ - [L]
+# Arahkan semua ke /public menjaga path
+RewriteRule ^(.*)$ public/$1 [L]
