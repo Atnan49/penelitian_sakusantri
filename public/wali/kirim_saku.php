@@ -1,14 +1,13 @@
 <?php
-require_once __DIR__ . '/../../src/includes/db_connect.php';
-require_once __DIR__ . '/../../src/includes/csrf.php';
+// Refactored: gunakan bootstrap penuh & pemeriksaan sesi terpusat untuk konsistensi keamanan.
+require_once __DIR__ . '/../../src/includes/init.php';
+require_once __DIR__ . '/../includes/session_check.php';
+require_role('wali_santri');
 require_once __DIR__ . '/../../src/includes/payments.php';
-// Ambil user_id dari session login wali
-if (isset($_SESSION['user_id'])) {
-    $user_id = $_SESSION['user_id'];
-} else {
-    header('Location: '.url('login'));
-    exit;
-}
+require_once __DIR__ . '/../../src/includes/upload_helper.php';
+// Identity sudah diisi oleh session_check
+$user_id = (int)($_SESSION['user_id'] ?? 0);
+if($user_id <= 0){ header('Location: '.url('login')); exit; }
 // Pastikan variabel utama terdefinisi
 $stage = 'amount';
 $pesan = null;
@@ -46,33 +45,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pesan_error = 'Data tidak valid.';
                 $stage = 'amount';
             } else {
-                // Upload proof and update payment
-                $uploads_dir = realpath(__DIR__ . '/../uploads');
-                if ($uploads_dir === false) { $uploads_dir = __DIR__ . '/../uploads'; @mkdir($uploads_dir, 0755, true); }
-                $max_size = 5 * 1024 * 1024;
-                $allowed_ext = ['jpg', 'jpeg', 'png', 'webp'];
-                $original = $_FILES['bukti']['name'] ?? '';
-                $tmp = $_FILES['bukti']['tmp_name'] ?? '';
-                $size = (int)($_FILES['bukti']['size'] ?? 0);
-                $ext = strtolower(pathinfo($original, PATHINFO_EXTENSION));
-                if (!in_array($ext, $allowed_ext, true)) { $pesan_error = 'Format file tidak didukung.'; $stage = 'upload'; }
-                elseif ($size <= 0 || $size > $max_size) { $pesan_error = 'Ukuran file tidak valid (maks 5MB).'; $stage = 'upload'; }
-                else {
-                    $finfo = new finfo(FILEINFO_MIME_TYPE); $mime = $finfo->file($tmp) ?: ''; $allowed_mimes = ['image/jpeg', 'image/png', 'image/webp'];
-                    if (!in_array($mime, $allowed_mimes, true)) { $pesan_error = 'Tipe file tidak valid.'; $stage = 'upload'; }
-                    else {
-                        $safe_name = payments_random_name('proof', '.' . $ext);
-                        $target_file = rtrim($uploads_dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $safe_name;
-                        if (move_uploaded_file($tmp, $target_file)) {
-                            // Update payment proof_file & move status awaiting_confirmation
-                            $stmt = mysqli_prepare($conn, 'UPDATE payment SET proof_file=?, updated_at=NOW() WHERE id=? AND user_id=?');
-                            if ($stmt) { mysqli_stmt_bind_param($stmt, 'sii', $safe_name, $current_payment_id, $user_id); mysqli_stmt_execute($stmt); }
-                            payment_update_status($conn, $current_payment_id, 'awaiting_confirmation', $user_id, 'proof uploaded');
-                            if (function_exists('add_notification')) { @add_notification($conn, null, 'wallet_topup_submitted', 'Top-up wallet menunggu konfirmasi', ['payment_id' => $current_payment_id, 'amount' => $jumlah_valid]); }
-                            $pesan = 'Top-Up berhasil diajukan. Menunggu konfirmasi admin.';
-                            $stage = 'amount'; $jumlah_valid = 0; $current_payment_id = null;
-                        } else { $pesan_error = 'Gagal mengupload bukti.'; $stage = 'upload'; }
-                    }
+                // Gunakan helper terpusat untuk validasi & penyimpanan file bukti pembayaran.
+                $up = handle_payment_proof_upload('bukti',["jpg","jpeg","png","webp"], 5*1024*1024);
+                if(!$up['ok']){
+                    $pesan_error = $up['error'] ?? 'Gagal mengupload bukti.';
+                    $stage = 'upload';
+                } else {
+                    $safe_name = $up['file'];
+                    $stmt = mysqli_prepare($conn, 'UPDATE payment SET proof_file=?, updated_at=NOW() WHERE id=? AND user_id=?');
+                    if ($stmt) { mysqli_stmt_bind_param($stmt, 'sii', $safe_name, $current_payment_id, $user_id); mysqli_stmt_execute($stmt); }
+                    payment_update_status($conn, $current_payment_id, 'awaiting_confirmation', $user_id, 'proof uploaded');
+                    if (function_exists('add_notification')) { @add_notification($conn, null, 'wallet_topup_submitted', 'Top-up wallet menunggu konfirmasi', ['payment_id' => $current_payment_id, 'amount' => $jumlah_valid]); }
+                    $pesan = 'Top-Up berhasil diajukan. Menunggu konfirmasi admin.';
+                    $stage = 'amount'; $jumlah_valid = 0; $current_payment_id = null;
                 }
             }
         }

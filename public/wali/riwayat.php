@@ -95,7 +95,7 @@ require_once BASE_PATH.'/src/includes/header.php';
 							<td>#<?= (int)$tp['id'] ?></td>
 							<td>Rp <?= number_format($tp['amount'],0,',','.') ?></td>
 							<td><span class="status-<?= e($tp['status']) ?>"><?= e(human_status_topup($tp['status'])) ?></span></td>
-							<td style="font-size:11px"><?php if($tp['proof_file']): ?><a href="../uploads/payment_proof/<?= e($tp['proof_file']) ?>" target="_blank">Lihat</a><?php else: ?>-<?php endif; ?></td>
+							<td style="font-size:11px"><?php if($tp['proof_file']): $pf = urlencode($tp['proof_file']); ?><a href="<?= url('bukti/f/'.$pf) ?>" target="_blank" rel="noopener">Lihat</a><?php else: ?>-<?php endif; ?></td>
 							<td><?= e($tp['created_at']) ?></td>
 						</tr>
 					<?php endforeach; endif; ?>

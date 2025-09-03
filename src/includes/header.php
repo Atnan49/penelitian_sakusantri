@@ -4,11 +4,17 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+// Prevent caching of dynamic authenticated pages (assets served separately with their own headers)
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('Pragma: no-cache');
 // Basic CSP (can be tightened later); allow self + inline styles for existing legacy CSS tweaks
 if(!headers_sent()){
-  // Semua inline script sudah dipindahkan => tidak butuh nonce. Sisakan 'unsafe-inline' pada style sementara karena masih ada inline <style> kecil di beberapa halaman.
   $csp = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'; form-action 'self'";
   header('Content-Security-Policy: '.$csp);
+  // Add HSTS only when running over HTTPS to avoid dev confusion
+  if(defined('APP_SCHEME') && APP_SCHEME === 'https'){
+    header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+  }
 }
 ?>
 <!DOCTYPE html>

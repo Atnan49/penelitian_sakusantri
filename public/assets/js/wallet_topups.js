@@ -6,26 +6,17 @@
   const openLink=document.getElementById('pmOpen');
   const toolbar=document.getElementById('pmToolbar');
   if(!modal||!img){ return; }
-  function setSrc(src,alt){
+  function setSrc(src){
     if(!src){ console.warn('[bukti] src kosong'); return; }
-    img.onerror=function(){
-      console.warn('[bukti] gagal load',src,'coba alt');
-      if(alt && img.getAttribute('data-alt-tried')!=='1'){
-        img.setAttribute('data-alt-tried','1');
-        img.src=alt;
-        if(openLink) openLink.href=alt;
-      }
-    };
+    img.onerror=function(){ console.warn('[bukti] gagal load',src); };
     img.src=src;
     if(openLink) openLink.href=src;
   }
   function open(btn){
-    const src=btn.getAttribute('data-img');
-    const alt=btn.getAttribute('data-alt');
+  const src=btn.getAttribute('data-img');
     const fn=btn.getAttribute('data-fn');
     modal.hidden=false; document.body.classList.add('modal-open');
-    img.removeAttribute('data-alt-tried');
-    setSrc(src,alt);
+  setSrc(src);
     img.alt='Bukti top-up '+(fn||'');
     if(fnSpan){ fnSpan.textContent=fn||''; }
     if(toolbar){ toolbar.hidden = !fn; }

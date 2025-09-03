@@ -92,7 +92,10 @@ require_once __DIR__ . '/../../src/includes/header.php';
             <td><?= e($r['nama_santri']) ?></td>
             <td class="num">Rp <?= number_format((float)$r['amount'],0,',','.') ?></td>
             <td>
-              <?php if($r['proof_file']): $pf=url('uploads/'.rawurlencode($r['proof_file'])); $plain='/uploads/'.rawurlencode($r['proof_file']); ?>
+              <?php if($r['proof_file']): 
+                // Gunakan route terproteksi bukti/f/<file>
+                $pf=url('bukti/f/'.rawurlencode($r['proof_file']));
+                $plain='bukti/f/'.rawurlencode($r['proof_file']); ?>
                 <button type="button" class="btn-action small btn-proof" data-img="<?= e($pf) ?>" data-alt="<?= e($plain) ?>" data-fn="<?= e($r['proof_file']) ?>">Lihat</button>
               <?php else: ?><span class="na">(belum)</span><?php endif; ?>
             </td>
@@ -134,7 +137,7 @@ require_once __DIR__ . '/../../src/includes/header.php';
         <a href="#" target="_blank" rel="noopener" id="pmOpen" class="btn-action small">Buka Tab</a>
       </div>
     </div>
-    <img alt="Bukti top-up" id="pmImg" src="" loading="lazy" />
+  <img alt="Bukti top-up" id="pmImg" src="" loading="lazy" />
   </div>
 </div>
 <?php require_once __DIR__ . '/../../src/includes/footer.php'; ?>

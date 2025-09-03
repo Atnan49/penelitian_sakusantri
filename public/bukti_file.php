@@ -18,17 +18,28 @@ if (!in_array($ext, $allowed_ext, true)) {
   exit;
 }
 
-// Validate file ownership for wali
+// Validate file ownership for wali (support legacy transaksi + new payment proofs)
 $allowed = false;
 if ($role === 'admin') {
   $allowed = true;
 } elseif ($role === 'wali_santri') {
+  // 1) Legacy transaksi table
   $stmt = mysqli_prepare($conn, 'SELECT 1 FROM transaksi WHERE user_id = ? AND bukti_pembayaran = ? LIMIT 1');
   if ($stmt) {
     mysqli_stmt_bind_param($stmt, 'is', $userId, $fn);
     mysqli_stmt_execute($stmt);
     $res = mysqli_stmt_get_result($stmt);
-    $allowed = ($res && mysqli_fetch_row($res));
+    if ($res && mysqli_fetch_row($res)) { $allowed = true; }
+  }
+  // 2) New payment table (proof_file) if not yet allowed
+  if(!$allowed) {
+    $stmt2 = mysqli_prepare($conn, 'SELECT 1 FROM payment WHERE user_id = ? AND proof_file = ? LIMIT 1');
+    if ($stmt2) {
+      mysqli_stmt_bind_param($stmt2, 'is', $userId, $fn);
+      mysqli_stmt_execute($stmt2);
+      $res2 = mysqli_stmt_get_result($stmt2);
+      if ($res2 && mysqli_fetch_row($res2)) { $allowed = true; }
+    }
   }
 }
 
