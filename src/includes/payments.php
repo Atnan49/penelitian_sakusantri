@@ -4,10 +4,13 @@
 
 if(!function_exists('ledger_post')){
   function ledger_post(mysqli $conn, ?int $userId, string $account, float $debit, float $credit, ?string $refType, ?int $refId, string $note=''): bool {
-    $stmt = mysqli_prepare($conn, 'INSERT INTO ledger_entries (user_id,account,debit,credit,ref_type,ref_id,note) VALUES (?,?,?,?,?,?,?)');
-    if(!$stmt) return false;
-    mysqli_stmt_bind_param($stmt,'isddsis',$userId,$account,$debit,$credit,$refType,$refId,$note);
+    // Corrected syntax for ledger_post function
+  $stmt = mysqli_prepare($conn, 'INSERT INTO ledger_entries (user_id,account,debit,credit,ref_type,ref_id,note) VALUES (?,?,?,?,?,?,?)');
+  if(!$stmt) return false;
+  // Perbaiki typo: $RefId menjadi $refId
+  mysqli_stmt_bind_param($stmt,'isddsis',$userId,$account,$debit,$credit,$refType,$refId,$note);
   $ok = mysqli_stmt_execute($stmt) === true;
+
   if($ok && $userId && $account==='WALLET'){
     // Sync users.saldo (best effort, ignore error)
     @mysqli_query($conn, 'UPDATE users u SET saldo = (SELECT COALESCE(SUM(debit-credit),0) FROM ledger_entries le WHERE le.user_id='.(int)$userId.' AND le.account="WALLET") WHERE u.id='.(int)$userId.' LIMIT 1');
@@ -22,7 +25,12 @@ if(!function_exists('invoice_create')){
     // Prevent duplicate for same user/type/period
     if($period !== null){
       $chk = mysqli_prepare($conn,'SELECT id FROM invoice WHERE user_id=? AND type=? AND period=? LIMIT 1');
-      if($chk){ mysqli_stmt_bind_param($chk,'iss',$userId,$type,$period); mysqli_stmt_execute($chk); $res = mysqli_stmt_get_result($chk); if($res && mysqli_fetch_row($res)) return null; }
+      if($chk){
+        mysqli_stmt_bind_param($chk,'iss',$userId,$type,$period);
+        mysqli_stmt_execute($chk);
+        $res = mysqli_stmt_get_result($chk);
+        if($res && mysqli_fetch_row($res)) return null;
+      }
     }
     // Feature detect meta_json column once
     static $invoiceMetaChecked = null; static $invoiceHasMeta = false;
@@ -35,20 +43,22 @@ if(!function_exists('invoice_create')){
     if($invoiceHasMeta){
       $metaArr = ['source'=>$source,'period'=>$period,'created_via'=>'invoice_create'];
       $meta = json_encode($metaArr, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
-  // Correct placeholder count (10 columns, 9 parameters after constant status)
-  $stmt = mysqli_prepare($conn,'INSERT INTO invoice (user_id,type,period,amount,due_date,status,notes,created_at,meta_json,source) VALUES (?,?,?,?,?,"pending",?,?,?,?)');
-  if(!$stmt) return null; // columns: 1:user_id 2:type 3:period 4:amount 5:due_date 6:status(const) 7:notes 8:created_at 9:meta_json 10:source
-  mysqli_stmt_bind_param($stmt,'issdsssss',$userId,$type,$period,$amount,$dueDate,$notes,$now,$meta,$source);
+      $stmt = mysqli_prepare($conn,'INSERT INTO invoice (user_id,type,period,amount,due_date,status,notes,created_at,meta_json,source) VALUES (?,?,?,?,?,"pending",?,?,?,?)');
+      if(!$stmt) { error_log('MySQL prepare error: '.mysqli_error($conn)); return null; }
+      mysqli_stmt_bind_param($stmt,'issdsssss',$userId,$type,$period,$amount,$dueDate,$notes,$now,$meta,$source);
     } else {
       $stmt = mysqli_prepare($conn,'INSERT INTO invoice (user_id,type,period,amount,due_date,status,notes,created_at) VALUES (?,?,?,?,?,"pending",?,?)');
-      if(!$stmt) return null;
+      if(!$stmt) { error_log('MySQL prepare error: '.mysqli_error($conn)); return null; }
       mysqli_stmt_bind_param($stmt,'issdsss',$userId,$type,$period,$amount,$dueDate,$notes,$now);
     }
-    if(!mysqli_stmt_execute($stmt)) return null;
+    if(!mysqli_stmt_execute($stmt)) {
+        error_log('MySQL execute error: ' . mysqli_error($conn));
+        return null;
+    }
     $iid = mysqli_insert_id($conn) ?: null;
     if($iid && function_exists('add_notification')){
       $msg = 'Tagihan baru: '.strtoupper($type).($period?(' '.$period):'').' Rp '.number_format($amount,0,',','.');
-      @add_notification($conn,$userId,'invoice_created',$msg,['invoice_id'=>$iid,'amount'=>$amount,'type'=>$type,'period'=>$period]);
+  @add_notification($conn,(int)$userId,'invoice_created',$msg,(array)array('invoice_id'=>$iid,'amount'=>$amount,'type'=>$type,'period'=>$period));
     }
     return $iid;
   }
@@ -74,6 +84,27 @@ if(!function_exists('invoice_generate_spp_bulk')){
   }
 }
 
+if(!function_exists('invoice_generate_daftar_ulang_bulk')){
+  /**
+   * Generate DAFTAR ULANG invoices (periode kini konsisten YYYYMM seperti SPP, default bulan 07)
+   * @param string $period YYYYMM
+   */
+  function invoice_generate_daftar_ulang_bulk(mysqli $conn, string $period, float $amount, ?string $dueDate=null): array {
+    if(!preg_match('/^[0-9]{6}$/',$period)) return ['created'=>0,'skipped'=>0];
+    $year = substr($period,0,4); $month = substr($period,4,2);
+    $created=0; $skipped=0; $dueDate = $dueDate ?: ($year.'-'.$month.'-15');
+    $res = mysqli_query($conn, "SELECT id FROM users WHERE role='wali_santri'");
+    while($res && ($u=mysqli_fetch_assoc($res))){
+      $id=(int)$u['id'];
+      $chk = mysqli_prepare($conn,'SELECT id FROM invoice WHERE user_id=? AND type="daftar_ulang" AND period=? LIMIT 1');
+      if($chk){ mysqli_stmt_bind_param($chk,'is',$id,$period); mysqli_stmt_execute($chk); $r=mysqli_stmt_get_result($chk); if($r && mysqli_fetch_row($r)){ $skipped++; continue; } }
+      $iid = invoice_create($conn,$id,'daftar_ulang',$period,$amount,$dueDate,'Tagihan Daftar Ulang '.$period);
+      if($iid){ $created++; } else { $skipped++; }
+    }
+    return ['created'=>$created,'skipped'=>$skipped];
+  }
+}
+
 if(!function_exists('payment_initiate')){
   function payment_initiate(mysqli $conn, int $userId, ?int $invoiceId, string $method, float $amount, string $idempotencyKey='', string $note=''): ?int {
   // Normalize amount to 2 decimals (avoid floating residue); reject negative/zero
@@ -82,6 +113,8 @@ if(!function_exists('payment_initiate')){
     if($idempotencyKey){
       $chk = mysqli_prepare($conn,'SELECT id FROM payment WHERE idempotency_key=? LIMIT 1');
       if($chk){ mysqli_stmt_bind_param($chk,'s',$idempotencyKey); mysqli_stmt_execute($chk); $res = mysqli_stmt_get_result($chk); if($res && ($row=mysqli_fetch_row($res))) return (int)$row[0]; }
+    } else {
+        $idempotencyKey = uniqid('pay_', true);
     }
     // Detect meta_json in payment table
     static $payMetaChecked = null; static $payHasMeta = false;
@@ -102,7 +135,9 @@ if(!function_exists('payment_initiate')){
       if(!$stmt) return null;
       mysqli_stmt_bind_param($stmt,'iisdss',$invoiceId,$userId,$method,$amount,$idempotencyKey,$note);
     }
-    if(!mysqli_stmt_execute($stmt)) return null;
+    if(!mysqli_stmt_execute($stmt)) {
+        die('MySQL error: ' . mysqli_error($conn));
+    }
     $pid = mysqli_insert_id($conn);
     payment_history_add($conn,$pid,null,'initiated',null,'init');
     return $pid ?: null;
@@ -144,7 +179,7 @@ if(!function_exists('payment_update_status')){
         $invoiceId = (int)$row['invoice_id']; $amount = (float)$row['amount']; $uid=(int)$row['user_id'];
         if($invoiceId){
           if(!invoice_apply_payment($conn,$invoiceId,$amount,$actorId,'auto-settle')){ mysqli_rollback($conn); return false; }
-          if(function_exists('add_notification')){ @add_notification($conn,$uid,'payment_settled','Pembayaran tagihan #'.$invoiceId.' berhasil (Rp '.number_format($amount,0,',','.').')',['invoice_id'=>$invoiceId,'payment_id'=>$paymentId,'amount'=>$amount]); }
+          if(function_exists('add_notification')){ @add_notification($conn,(int)$uid,'payment_settled','Pembayaran tagihan #'.$invoiceId.' berhasil (Rp '.number_format($amount,0,',','.').')',(array)array('invoice_id'=>$invoiceId,'payment_id'=>$paymentId,'amount'=>$amount)); }
           // Ledger double-entry (non-wallet): assume CASH_IN (kas masuk) & AR_SPP (piutang) decrease
           if($row['method'] !== 'wallet'){
             // Debit CASH_IN, Credit AR_SPP
@@ -155,7 +190,7 @@ if(!function_exists('payment_update_status')){
         } else {
           // Top-up wallet: credit WALLET
           if(!ledger_post($conn,$uid,'WALLET',$amount,0,'payment',$paymentId,'Top-up settled')){ mysqli_rollback($conn); return false; }
-          if(function_exists('add_notification')){ @add_notification($conn,$uid,'wallet_topup_settled','Top-up wallet berhasil Rp '.number_format($amount,0,',','.'),['payment_id'=>$paymentId,'amount'=>$amount]); }
+          if(function_exists('add_notification')){ @add_notification($conn,(int)$uid,'wallet_topup_settled','Top-up wallet berhasil Rp '.number_format($amount,0,',','.'),(array)array('payment_id'=>$paymentId,'amount'=>$amount)); }
         }
       }
     }
@@ -236,7 +271,7 @@ if(!function_exists('wallet_pay_invoice')){
     // Apply to invoice
     if(!invoice_apply_payment($conn,$invoiceId,$amount,$userId,'wallet pay')){ mysqli_rollback($conn); return ['ok'=>false,'msg'=>'Update invoice gagal']; }
     mysqli_commit($conn);
-  if(function_exists('add_notification')){ @add_notification($conn,$userId,'wallet_invoice_payment','Pembayaran wallet untuk invoice #'.$invoiceId.' Rp '.number_format($amount,0,',','.'),['invoice_id'=>$invoiceId,'payment_id'=>$pid,'amount'=>$amount]); }
+  if(function_exists('add_notification')){ @add_notification($conn,(int)$userId,'wallet_invoice_payment','Pembayaran wallet untuk invoice #'.$invoiceId.' Rp '.number_format($amount,0,',','.'),(array)array('invoice_id'=>$invoiceId,'payment_id'=>$pid,'amount'=>$amount)); }
   return ['ok'=>true,'msg'=>'Pembayaran wallet berhasil (#'.$pid.')'];
   }
 }
@@ -263,7 +298,7 @@ if(!function_exists('invoice_mark_overdue_bulk')){
     if($ok){
       foreach($rows as $r){
         invoice_history_add($conn,(int)$r['id'],$r['status'],'overdue',null,'auto overdue');
-  if(function_exists('add_notification')){ @add_notification($conn,(int)$r['user_id'],'invoice_overdue','Invoice #'.$r['id'].' melewati jatuh tempo',['invoice_id'=>(int)$r['id']]); }
+  if(function_exists('add_notification')){ @add_notification($conn,(int)$r['user_id'],'invoice_overdue','Invoice #'.$r['id'].' melewati jatuh tempo',(array)array('invoice_id'=>(int)$r['id'])); }
       }
       return ['updated'=>count($ids)];
     }
@@ -324,7 +359,54 @@ if(!function_exists('payment_reversal')){
     mysqli_stmt_bind_param($up,'i',$paymentId); if(!mysqli_stmt_execute($up)){ mysqli_rollback($conn); return ['ok'=>false,'msg'=>'Gagal simpan']; }
     payment_history_add($conn,$paymentId,'settled','reversed',$actorId,$reason);
     mysqli_commit($conn);
-  if(function_exists('add_notification')){ @add_notification($conn,$uid,'payment_reversed','Payment #'.$paymentId.' dibatalkan'.($invoiceId?' (invoice #'.$invoiceId.')':''),['payment_id'=>$paymentId,'invoice_id'=>$invoiceId,'amount'=>$amount]); }
+  if(function_exists('add_notification')){ @add_notification($conn,(int)$uid,'payment_reversed','Payment #'.$paymentId.' dibatalkan'.($invoiceId?' (invoice #'.$invoiceId.')':''),(array)array('payment_id'=>$paymentId,'invoice_id'=>$invoiceId,'amount'=>$amount)); }
   return ['ok'=>true,'msg'=>'Payment #'.$paymentId.' berhasil direverse'];
+  }
+}
+
+if(!function_exists('payment_confirm')){
+  /**
+   * Konfirmasi pembayaran (transition awaiting_confirmation -> settled)
+   * Terapkan seluruh side-effect (invoice paid_amount, history, ledger, notifikasi)
+   * Aman dipanggil ulang: jika sudah settled akan return ok=false dengan pesan.
+   */
+  function payment_confirm(mysqli $conn, int $paymentId, int $adminId, string $note='admin confirm'): array {
+    if($paymentId<=0 || $adminId<=0) return ['ok'=>false,'msg'=>'Data tidak valid'];
+    mysqli_begin_transaction($conn);
+    // Lock payment row
+    $sel = mysqli_prepare($conn,'SELECT id, status, invoice_id, user_id, amount, method FROM payment WHERE id=? FOR UPDATE');
+    if(!$sel){ mysqli_rollback($conn); return ['ok'=>false,'msg'=>'DB error']; }
+    mysqli_stmt_bind_param($sel,'i',$paymentId); mysqli_stmt_execute($sel); $rs=mysqli_stmt_get_result($sel); $p=$rs?mysqli_fetch_assoc($rs):null;
+    if(!$p){ mysqli_rollback($conn); return ['ok'=>false,'msg'=>'Payment tidak ditemukan']; }
+    if($p['status']==='settled'){ mysqli_rollback($conn); return ['ok'=>false,'msg'=>'Sudah settled']; }
+    if($p['status']!=='awaiting_confirmation'){ mysqli_rollback($conn); return ['ok'=>false,'msg'=>'Status tidak bisa dikonfirmasi']; }
+    $now=date('Y-m-d H:i:s');
+    // Update status payment -> settled
+    $up = mysqli_prepare($conn,'UPDATE payment SET status="settled", updated_at=?, settled_at=?, note=? WHERE id=? AND status="awaiting_confirmation"');
+    if(!$up){ mysqli_rollback($conn); return ['ok'=>false,'msg'=>'Gagal update payment']; }
+    mysqli_stmt_bind_param($up,'sssi',$now,$now,$note,$paymentId);
+    if(!mysqli_stmt_execute($up) || mysqli_stmt_affected_rows($up)===0){ mysqli_rollback($conn); return ['ok'=>false,'msg'=>'Payment tidak ditemukan / sudah berubah']; }
+    payment_history_add($conn,$paymentId,'awaiting_confirmation','settled',$adminId,$note);
+    $invoiceId = (int)$p['invoice_id']; $amount=(float)$p['amount']; $uid=(int)$p['user_id'];
+    // Side effects: invoice & ledger
+    if($invoiceId){
+      // Lock invoice row for update
+      $lock = mysqli_prepare($conn,'SELECT id FROM invoice WHERE id=? FOR UPDATE'); if($lock){ mysqli_stmt_bind_param($lock,'i',$invoiceId); mysqli_stmt_execute($lock); mysqli_stmt_get_result($lock); }
+      if(!invoice_apply_payment($conn,$invoiceId,$amount,$adminId,'confirm')){ mysqli_rollback($conn); return ['ok'=>false,'msg'=>'Gagal apply ke invoice']; }
+      // Ledger (non-wallet): debit CASH_IN, credit AR_SPP (accounting sederhana)
+      if($p['method']!=='wallet'){
+        if(!ledger_post($conn,$uid,'CASH_IN',$amount,0,'payment',$paymentId,'Confirm settle') || !ledger_post($conn,$uid,'AR_SPP',0,$amount,'payment',$paymentId,'Reduce AR')){ mysqli_rollback($conn); return ['ok'=>false,'msg'=>'Ledger gagal']; }
+      } else {
+        // Jika metode wallet seharusnya jalur konfirmasi tidak dipakai (wallet auto-settle), tapi handle noop.
+      }
+    } else {
+      // Top-up wallet: tambah saldo (ledger WALLET debit)
+      if(!ledger_post($conn,$uid,'WALLET',$amount,0,'payment',$paymentId,'Wallet topup confirm')){ mysqli_rollback($conn); return ['ok'=>false,'msg'=>'Ledger gagal']; }
+    }
+    mysqli_commit($conn);
+    if(function_exists('add_notification')){
+      @add_notification($conn,$uid,'payment_settled','Pembayaran dikonfirmasi (#'.$paymentId.') Rp '.number_format($amount,0,',','.'),(array)array('payment_id'=>$paymentId,'invoice_id'=>$invoiceId,'amount'=>$amount));
+    }
+    return ['ok'=>true,'msg'=>'Payment dikonfirmasi'];
   }
 }

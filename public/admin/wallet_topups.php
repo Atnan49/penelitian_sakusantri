@@ -49,7 +49,7 @@ require_once __DIR__ . '/../../src/includes/header.php';
     <h1>Top-Up Wallet</h1>
     <div class="quick-actions-inline">
       <a class="qa-btn" href="invoice.php">Invoice</a>
-      <a class="qa-btn" href="generate_spp.php">Generate SPP</a>
+  <!-- Link Generate SPP dihapus -->
     </div>
   </div>
   <p class="page-intro">Monitoring top-up saldo wallet terbaru. Settle setelah verifikasi bukti transfer.</p>
@@ -92,8 +92,8 @@ require_once __DIR__ . '/../../src/includes/header.php';
             <td><?= e($r['nama_santri']) ?></td>
             <td class="num">Rp <?= number_format((float)$r['amount'],0,',','.') ?></td>
             <td>
-              <?php if($r['proof_file']): $pf=url('uploads/'.rawurlencode($r['proof_file'])); ?>
-                <button type="button" class="btn-action small btn-proof" data-img="<?= e($pf) ?>">Lihat</button>
+              <?php if($r['proof_file']): $pf=url('uploads/'.rawurlencode($r['proof_file'])); $plain='/uploads/'.rawurlencode($r['proof_file']); ?>
+                <button type="button" class="btn-action small btn-proof" data-img="<?= e($pf) ?>" data-alt="<?= e($plain) ?>" data-fn="<?= e($r['proof_file']) ?>">Lihat</button>
               <?php else: ?><span class="na">(belum)</span><?php endif; ?>
             </td>
             <td><span class="status-badge <?= e($stClass) ?>"><?= e(str_replace('_',' ',$r['status'])) ?></span></td>
@@ -101,17 +101,17 @@ require_once __DIR__ . '/../../src/includes/header.php';
             <td><?= $r['settled_at']?date('d M Y H:i',strtotime($r['settled_at'])):'-' ?></td>
             <td class="acts">
               <?php if(in_array($r['status'],['awaiting_confirmation','awaiting_proof','initiated'])): ?>
-                <form method="post" class="inline" onsubmit="return confirm('Settle top-up #<?= (int)$r['id'] ?>?')">
+                <form method="post" class="inline" data-confirm="Setujui top-up #<?= (int)$r['id'] ?>?">
                   <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>" />
                   <input type="hidden" name="pid" value="<?= (int)$r['id'] ?>" />
                   <input type="hidden" name="aksi" value="settle" />
-                  <button class="btn-action small" type="submit">Settle</button>
+                  <button class="btn-action small" type="submit">Setujui</button>
                 </form>
-                <form method="post" class="inline" onsubmit="return confirm('Tandai gagal #<?= (int)$r['id'] ?>?')">
+                <form method="post" class="inline" data-confirm="Tolak top-up #<?= (int)$r['id'] ?>?">
                   <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>" />
                   <input type="hidden" name="pid" value="<?= (int)$r['id'] ?>" />
                   <input type="hidden" name="aksi" value="fail" />
-                  <button class="btn-action small danger" type="submit">Fail</button>
+                  <button class="btn-action small danger" type="submit">Tolak</button>
                 </form>
               <?php else: ?><span class="dash">-</span><?php endif; ?>
             </td>
@@ -128,15 +128,14 @@ require_once __DIR__ . '/../../src/includes/header.php';
   <div class="pm-back" data-close></div>
   <div class="pm-card">
     <button type="button" class="pm-close" data-close>&times;</button>
+    <div class="pm-toolbar" id="pmToolbar" hidden>
+      <span class="pm-fn" id="pmFn"></span>
+      <div class="pm-actions">
+        <a href="#" target="_blank" rel="noopener" id="pmOpen" class="btn-action small">Buka Tab</a>
+      </div>
+    </div>
     <img alt="Bukti top-up" id="pmImg" src="" loading="lazy" />
   </div>
 </div>
 <?php require_once __DIR__ . '/../../src/includes/footer.php'; ?>
-<script nonce="<?= htmlspecialchars($GLOBALS['SCRIPT_NONCE'] ?? '',ENT_QUOTES,'UTF-8'); ?>">(function(){
-  const modal=document.getElementById('proofModal'); const img=document.getElementById('pmImg');
-  function open(src){ if(!modal) return; img.src=src; modal.hidden=false; document.body.classList.add('modal-open'); }
-  function close(){ if(!modal) return; modal.hidden=true; img.src=''; document.body.classList.remove('modal-open'); }
-  document.querySelectorAll('.btn-proof').forEach(b=>b.addEventListener('click',()=>open(b.getAttribute('data-img'))));
-  modal?.addEventListener('click',e=>{ if(e.target.hasAttribute('data-close')) close(); });
-  document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !modal.hidden) close(); });
-})();</script>
+<script src="<?= url('assets/js/wallet_topups.js') ?>" defer></script>

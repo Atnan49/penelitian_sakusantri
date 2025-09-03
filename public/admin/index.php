@@ -2,6 +2,9 @@
 require_once __DIR__ . "/../../src/includes/init.php";
 require_once __DIR__ . '/../includes/session_check.php';
 require_role("admin");
+// Re-sync wallet cached saldo with ledger (lightweight)
+require_once __DIR__ . '/../../src/includes/wallet_sync.php';
+$walletSync = wallet_recalc_all($conn);
 // Gunakan analytics helper agar query konsisten & reusable
 $metrics = analytics_dashboard_core($conn);
 $total_wali = $metrics['total_wali'];
@@ -9,7 +12,10 @@ $total_saldo = $metrics['total_saldo'];
 $invoice_paid = $metrics['invoice']['paid'];
 $invoice_overdue = $metrics['invoice']['overdue'];
 $invoice_unpaid = $metrics['invoice']['pending'] + $metrics['invoice']['partial'];
+// Outstanding lama tetap tersedia jika ingin dipakai di tempat lain
 $outstanding_amount = $metrics['outstanding'];
+// Total nominal seluruh tagihan SPP (semua status) untuk badge kecil
+$invoice_total_amount = $metrics['invoice_total_amount'] ?? 0;
 $pending_invoice = $metrics['payments']['pending_invoice'];
 $pending_topup = $metrics['payments']['pending_topup'];
 $pending_total = $metrics['payments']['pending_total'];
@@ -23,7 +29,7 @@ require_once __DIR__ . "/../../src/includes/header.php";
     <h1>BERANDA ADMIN</h1>
     <div class="quick-actions-inline" aria-label="Tindakan cepat">
       <a class="qa-btn" href="<?php echo url('admin/invoice.php'); ?>">Kelola Invoice</a>
-      <a class="qa-btn" href="<?php echo url('admin/generate_spp.php'); ?>">Generate SPP</a>
+  <!-- Link Generate SPP dihapus -->
       <a class="qa-btn" href="<?php echo url('admin/pengguna.php'); ?>">Data Santri</a>
     </div>
   </div>
@@ -31,12 +37,12 @@ require_once __DIR__ . "/../../src/includes/header.php";
     <div class="stat-box wallet" role="group" aria-label="Total Tabungan Santri">
       <h3>Tabungan Santri</h3>
       <div class="amount" aria-live="polite">Rp <?php echo number_format($total_saldo,0,',','.'); ?></div>
-      <button class="mini-act" onclick="location.href='<?php echo url('admin/wallet_topups.php'); ?>'" title="Top-Up Wallet">Top-Up</button>
+      <button class="mini-act" data-href="<?php echo url('admin/wallet_topups.php'); ?>" title="Top-Up Wallet">Top-Up</button>
     </div>
     <div class="stat-box invoice" role="group" aria-label="Status Tagihan SPP">
       <h3>Tagihan SPP</h3>
       <div class="amount secondary" aria-live="polite"><?php echo number_format($belum); ?> belum / overdue</div>
-      <div class="mini-act second" title="Outstanding"><?php echo format_rp($outstanding_amount); ?></div>
+      <div class="mini-act second" title="Total Nominal Semua Tagihan SPP"><?php echo format_rp($invoice_total_amount); ?></div>
     </div>
   </div>
   <div class="mini-stats" aria-label="Statistik detail">

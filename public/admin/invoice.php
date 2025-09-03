@@ -4,33 +4,43 @@ require_once __DIR__ . '/../includes/session_check.php';
 require_role('admin');
 require_once BASE_PATH.'/src/includes/payments.php';
 
-$msg=$err=null; $period = $_GET['period'] ?? date('Ym');
+$msg=$err=null; $filter_type = $_GET['type'] ?? 'all';
+$allowedTypes=['spp','daftar_ulang','all']; if(!in_array($filter_type,$allowedTypes,true)) $filter_type='all';
+// Default period kosong (tahun & bulan '--') untuk menampilkan semua
+$period = array_key_exists('period',$_GET)? $_GET['period'] : '';
 $filter_status = $_GET['status'] ?? '';
-$do = $_POST['do'] ?? '';
-if($_SERVER['REQUEST_METHOD']==='POST'){
-  if(!verify_csrf_token($_POST['csrf_token'] ?? '')){ $err='Token tidak valid'; }
-  else if($do==='gen_spp'){
-    $p = preg_replace('/[^0-9]/','', $_POST['period'] ?? '');
-    if(strlen($p)!==6){ $err='Format periode salah'; }
-    else {
-  $amount = normalize_amount($_POST['amount'] ?? 0);
-      if($amount<=0) $err='Nominal harus > 0';
-      else {
-        $due = $_POST['due_date'] ?? '';
-        if($due && !preg_match('/^\d{4}-\d{2}-\d{2}$/',$due)) $due='';
-        $res = invoice_generate_spp_bulk($conn,$p,$amount,$due?:null);
-        $msg = 'Generate SPP '.$p.': dibuat '.$res['created'].', skip '.$res['skipped'];
-        $period = $p;
-      }
-    }
+// Normalisasi period sesuai jenis
+if($filter_type==='daftar_ulang'){
+  // Hanya gunakan 4 digit tahun; selain itu kosongkan supaya tampil semua daftar ulang
+  if(!preg_match('/^[0-9]{4}$/',$period)) $period='';
+} elseif($filter_type==='spp'){
+  // Pastikan format YYYYMM atau kosong
+  if($period!=='' && !preg_match('/^[0-9]{6}$/',$period)) $period='';
+} else { // all
+  // Terima YYYYMM (SPP) atau kosong; jika user kirim YYYY treat sebagai tahun untuk daftar ulang+SPP nanti logic conds handle
+  if($period!=='' && !preg_match('/^[0-9]{4}([0-9]{2})?$/',$period)) $period='';
+}
+// Override: jika datang dari link lama (period=current month) & type=all, jadikan kosong agar tampil semua
+if($filter_type==='all' && isset($_GET['period']) && $_GET['period']===date('Ym') && !isset($_GET['force_period'])){
+  $period='';
+}
+// Fitur generate SPP langsung dari halaman invoice telah dihapus.
+
+// Ambil daftar invoice (support filter jenis)
+$params=[]; $types=''; $conds=[];
+$year = strlen($period)>=4 ? substr($period,0,4):'';
+if($filter_type==='spp'){
+  $conds[]="i.type='spp'"; if($period && strlen($period)==6){ $conds[]='i.period=?'; $params[]=$period; $types.='s'; }
+} elseif($filter_type==='daftar_ulang'){
+  $conds[]="i.type='daftar_ulang'"; if($year){ $conds[]='i.period=?'; $params[]=$year; $types.='s'; }
+} else { // all
+  if($period && strlen($period)==6){
+    // Kedua jenis sekarang memakai format YYYYMM yang sama
+    $conds[] = "((i.type='spp' AND i.period=?) OR (i.type='daftar_ulang' AND i.period=?))"; $params[]=$period; $types.='s'; $params[]=$period; $types.='s';
   }
 }
-
-// Ambil daftar invoice
-$where = '1=1';
-$params=[]; $types='';
-if($period){ $where.=' AND period=?'; $params[]=$period; $types.='s'; }
-if($filter_status){ $where.=' AND status=?'; $params[]=$filter_status; $types.='s'; }
+if($filter_status){ $conds[]='i.status=?'; $params[]=$filter_status; $types.='s'; }
+$where = $conds? implode(' AND ',$conds):'1=1';
 $page = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 100; $offset = ($page-1)*$perPage; if($offset>5000) $offset=5000; // hard cap
 $sql = "SELECT i.*, u.nama_santri FROM invoice i JOIN users u ON i.user_id=u.id WHERE $where ORDER BY i.id DESC LIMIT $perPage OFFSET $offset";
@@ -42,10 +52,17 @@ if($stmt = mysqli_prepare($conn,$sql)){
   mysqli_stmt_execute($stmt); $r = mysqli_stmt_get_result($stmt); while($r && $row=mysqli_fetch_assoc($r)){ $rows[]=$row; }
 }
 
-// Status distribution (ignore individual status filter so admin bisa lihat komposisi)
+// Status distribution (sesuaikan scope)
 $distCounts = ['pending'=>0,'partial'=>0,'paid'=>0,'overdue'=>0,'canceled'=>0];
-$outstandingTotal = 0; $baseWhere = '1=1'; $baseParams=[]; $baseTypes='';
-if($period){ $baseWhere.=' AND period=?'; $baseParams[]=$period; $baseTypes.='s'; }
+$outstandingTotal = 0; $baseParams=[]; $baseTypes=''; $baseConds=[];
+if($filter_type==='spp'){
+  $baseConds[]="type='spp'"; if($period && strlen($period)==6){ $baseConds[]='period=?'; $baseParams[]=$period; $baseTypes.='s'; }
+} elseif($filter_type==='daftar_ulang'){
+  $baseConds[]="type='daftar_ulang'"; if($year){ $baseConds[]='period=?'; $baseParams[]=$year; $baseTypes.='s'; }
+} else {
+  if($period && strlen($period)==6){ $baseConds[]="((type='spp' AND period=?) OR (type='daftar_ulang' AND period=?))"; $baseParams[]=$period; $baseTypes.='s'; $baseParams[]=$period; $baseTypes.='s'; }
+}
+$baseWhere = $baseConds? implode(' AND ',$baseConds):'1=1';
 $sqlDist = "SELECT status, COUNT(*) c, SUM(amount-paid_amount) os FROM invoice WHERE $baseWhere GROUP BY status";
 if($dstmt = mysqli_prepare($conn,$sqlDist)){
   if($baseParams){ mysqli_stmt_bind_param($dstmt,$baseTypes,...$baseParams); }
@@ -56,18 +73,23 @@ if($dstmt = mysqli_prepare($conn,$sqlDist)){
   }
 }
 $totalAll = array_sum($distCounts) ?: 1;
+// Diagnostic: count invoices per type to aid troubleshooting filter
+$typeCounts=['spp'=>0,'daftar_ulang'=>0];
+$resType = mysqli_query($conn,"SELECT type, COUNT(*) c FROM invoice GROUP BY type");
+while($resType && ($tr=mysqli_fetch_assoc($resType))){ if(isset($typeCounts[$tr['type']])) $typeCounts[$tr['type']] = (int)$tr['c']; }
 require_once BASE_PATH.'/src/includes/header.php';
 ?>
 <div class="page-shell invoice-page">
   <div class="content-header">
-    <h1>Invoice SPP</h1>
+  <h1>Invoice</h1>
   <div class="quick-actions-inline">
       <a class="qa-btn" href="invoice_overdue_run.php" title="Tandai Overdue">Run Overdue</a>
-      <a class="qa-btn" href="generate_spp.php" title="Halaman Generate SPP">Generate SPP</a>
+  <a class="qa-btn" href="generate_spp.php" title="Halaman Generate Tagihan">Generate Tagihan</a>
     </div>
   </div>
   <?php if($msg): ?><div class="alert success" role="alert"><?= e($msg) ?></div><?php endif; ?>
   <?php if($err): ?><div class="alert error" role="alert"><?= e($err) ?></div><?php endif; ?>
+  <div class="small muted" style="margin:-8px 0 10px 0; font-size:12px">Diag: SPP <?= $typeCounts['spp'] ?> | Daftar Ulang <?= $typeCounts['daftar_ulang'] ?></div>
 
   <div class="inv-chips" aria-label="Ringkasan status periode">
     <div class="inv-chip warn" title="Belum Dibayar (Pending + Partial)"><span class="k">Belum</span><span class="v"><?= number_format($distCounts['pending'] + $distCounts['partial']); ?></span></div>
@@ -75,89 +97,49 @@ require_once BASE_PATH.'/src/includes/header.php';
     <div class="inv-chip ok" title="Lunas"><span class="k">Lunas</span><span class="v"><?= number_format($distCounts['paid']); ?></span></div>
     <div class="inv-chip mute" title="Batal"><span class="k">Batal</span><span class="v"><?= number_format($distCounts['canceled']); ?></span></div>
     <div class="inv-chip info" title="Outstanding"><span class="k">Outstanding</span><span class="v">Rp <?= number_format($outstandingTotal,0,',','.'); ?></span></div>
-    <button class="btn-action small btn-generate-open" type="button">Generate SPP</button>
+    <!-- Tombol Generate SPP dihapus -->
   </div>
 
-  <!-- Modal Generate SPP -->
-  <div class="ds-modal gen-modal" id="genModal" hidden>
-    <div class="modal-card small">
-      <div class="modal-head"><h3>Generate SPP</h3><button type="button" class="close-gen" aria-label="Tutup">×</button></div>
-      <form method="post" class="gen-form-simple" id="genSPPForm" autocomplete="off">
-        <?php 
-          $curYear = substr($period,0,4); $curMonth = substr($period,4,2); 
-          $nowYear = (int)date('Y');
-          $yearStart = max(2020,$nowYear-1); $yearEnd = $nowYear+3; 
-          if((int)$curYear < $yearStart){ $yearStart = (int)$curYear; }
-          if((int)$curYear > $yearEnd){ $yearEnd = (int)$curYear; }
-        ?>
-        <div class="row">
-          <label>Periode</label>
-          <div class="period-dual">
-            <div class="ywrap">
-              <select id="yearInput" required aria-label="Tahun">
-                <?php for($y=$yearStart;$y<=$yearEnd;$y++): ?>
-                  <option value="<?= $y ?>" <?php if((int)$curYear===$y) echo 'selected'; ?>><?= $y ?></option>
-                <?php endfor; ?>
-              </select>
-            </div>
-            <div class="mwrap">
-              <select id="monthInput" aria-label="Bulan" required>
-                <?php for($m=1;$m<=12;$m++): $mm=str_pad((string)$m,2,'0',STR_PAD_LEFT); ?>
-                  <option value="<?= $mm ?>" <?php if($mm===$curMonth) echo 'selected'; ?>><?= $mm ?></option>
-                <?php endfor; ?>
-              </select>
-            </div>
-          </div>
-          <input type="hidden" id="periodInput" name="period" value="<?= e($period) ?>">
-        </div>
-        <div class="row">
-          <label for="amountInput">Nominal</label>
-          <input type="number" id="amountInput" name="amount" value="150000" step="1000" min="1000" required>
-          <div class="small muted" id="amountPreview">Rp 150.000</div>
-        </div>
-        <div class="row">
-          <label for="dueDateInput">Jatuh Tempo</label>
-          <input type="date" id="dueDateInput" name="due_date" value="">
-          <div class="due-helpers">
-            <button type="button" class="btn-action small end-month">Akhir Bulan</button>
-            <button type="button" class="btn-action small plus7">+7 Hari</button>
-            <label class="auto"><input type="checkbox" id="autoDueEnd" checked> Auto akhir bulan</label>
-          </div>
-        </div>
-        <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-        <input type="hidden" name="do" value="gen_spp">
-        <div class="modal-actions"><button class="btn-action primary">Generate</button></div>
-      </form>
-    </div>
-  </div>
+  <!-- Modal generate SPP dihapus -->
 
   <div class="panel section invoice-list">
     <div class="panel-header"><h2>Daftar Invoice</h2></div>
     <?php 
       $fYear = substr($period,0,4); $fMonth = substr($period,4,2); 
-      $nowYear = (int)date('Y');
-      $fyStart = max(2020,$nowYear-1); $fyEnd = $nowYear+3;
-      if((int)$fYear < $fyStart){ $fyStart = (int)$fYear; }
-      if((int)$fYear > $fyEnd){ $fyEnd = (int)$fYear; }
+      // Ambil distinct tahun dari invoice agar dropdown ringkas
+      $yearOptions=[]; $yrRes=mysqli_query($conn,"SELECT DISTINCT LEFT(period,4) y FROM invoice WHERE period IS NOT NULL AND period<>'' ORDER BY y DESC LIMIT 20");
+      while($yrRes && ($yr=mysqli_fetch_row($yrRes))) { if(preg_match('/^[0-9]{4}$/',$yr[0])) $yearOptions[]=$yr[0]; }
+      if(!$yearOptions){ // fallback jika belum ada data
+        $nowYear=(int)date('Y'); for($y=$nowYear-1;$y<=$nowYear+3;$y++){ $yearOptions[]=$y; }
+        rsort($yearOptions); // terbaru dulu
+      }
     ?>
-    <form method="get" class="inv-filter" autocomplete="off" id="filterInvoiceForm">
+  <form method="get" class="inv-filter" autocomplete="off" id="filterInvoiceForm">
       <div class="grp period">
         <label>Periode</label>
         <div class="period-dual small">
           <select id="fYear" aria-label="Tahun">
             <option value="">--</option>
-            <?php for($y=$fyStart;$y<=$fyEnd;$y++): ?>
-              <option value="<?= $y ?>" <?php if((int)$fYear===$y) echo 'selected'; ?>><?= $y ?></option>
-            <?php endfor; ?>
+            <?php foreach($yearOptions as $y): ?>
+              <option value="<?= e($y) ?>" <?php if($fYear===(string)$y) echo 'selected'; ?>><?= e($y) ?></option>
+            <?php endforeach; ?>
           </select>
-          <select id="fMonth" aria-label="Bulan">
+      <select id="fMonth" aria-label="Bulan" data-role="month-select">
             <option value="">--</option>
             <?php for($m=1;$m<=12;$m++): $mm=str_pad((string)$m,2,'0',STR_PAD_LEFT); ?>
               <option value="<?= $mm ?>" <?php if($mm===$fMonth) echo 'selected'; ?>><?= $mm ?></option>
             <?php endfor; ?>
           </select>
         </div>
-        <input type="hidden" id="fPeriodHidden" name="period" value="<?= e($period) ?>">
+  <input type="hidden" id="fPeriodHidden" name="period" value="<?= e($period) ?>">
+      </div>
+      <div class="grp type">
+        <label for="fType">Jenis</label>
+        <select id="fType" name="type">
+          <option value="spp" <?= $filter_type==='spp'?'selected':''; ?>>SPP</option>
+          <option value="daftar_ulang" <?= $filter_type==='daftar_ulang'?'selected':''; ?>>Daftar Ulang</option>
+          <option value="all" <?= $filter_type==='all'?'selected':''; ?>>Semua</option>
+        </select>
       </div>
       <div class="grp status">
         <label for="fStatus">Status</label>
@@ -170,15 +152,16 @@ require_once BASE_PATH.'/src/includes/header.php';
       </div>
       <div class="grp actions">
         <button class="btn-action outline">Filter</button>
-        <a href="?period=<?= urlencode($period) ?>" class="btn-action" title="Reset">Reset</a>
+        <a href="?type=<?= urlencode($filter_type) ?>" class="btn-action" title="Reset">Reset</a>
       </div>
     </form>
     <div class="table-wrap">
   <table class="table table-compact invoice-table slim" style="min-width:780px" aria-describedby="invCaption">
-        <caption id="invCaption" style="position:absolute;left:-9999px;top:-9999px;">Daftar invoice SPP</caption>
+        <caption id="invCaption" style="position:absolute;left:-9999px;top:-9999px;">Daftar invoice</caption>
         <thead><tr>
           <th>ID</th>
           <th>Santri</th>
+          <th>Jenis</th>
           <th>Periode</th>
           <th class="num">Nominal</th>
             <th class="num">Dibayar</th>
@@ -188,12 +171,17 @@ require_once BASE_PATH.'/src/includes/header.php';
         </tr></thead>
         <tbody>
         <?php if(!$rows): ?>
-          <tr><td colspan="8" style="text-align:center;font-size:13px;color:#777">Belum ada invoice.</td></tr>
+          <tr><td colspan="9" style="text-align:center;font-size:13px;color:#777">
+            <?php if($filter_type==='daftar_ulang' && $typeCounts['daftar_ulang']===0): ?>
+              Belum ada invoice Daftar Ulang. Gunakan tombol Generate Tagihan & pilih Daftar Ulang.
+            <?php else: ?>Belum ada invoice.<?php endif; ?>
+          </td></tr>
         <?php else: foreach($rows as $inv): ?>
           <?php $amt=(float)$inv['amount']; $paid=(float)$inv['paid_amount']; $ratio=$amt>0?min(1,$paid/$amt):0; $pct=round($ratio*100,1); ?>
           <tr class="st-<?= e(str_replace('_','-',$inv['status'])) ?>">
             <td>#<?= (int)$inv['id'] ?></td>
             <td><?= e($inv['nama_santri']) ?></td>
+            <td><?= e(strtoupper(str_replace('_',' ',$inv['type']))) ?></td>
             <td><?= e($inv['period']) ?></td>
             <td class="num">Rp <?= number_format($amt,0,',','.') ?></td>
             <td class="num">Rp <?= number_format($paid,0,',','.') ?><?php if($paid>0 && $paid<$amt) echo ' <span class="pct">('.$pct.'%)</span>'; ?></td>
@@ -217,36 +205,23 @@ require_once BASE_PATH.'/src/includes/header.php';
 <?php require_once BASE_PATH.'/src/includes/footer.php'; ?>
 <script nonce="<?= htmlspecialchars($GLOBALS['SCRIPT_NONCE'] ?? '',ENT_QUOTES,'UTF-8'); ?>">
 (function(){
-  const genModal=document.getElementById('genModal');
-  const openBtn=document.querySelector('.btn-generate-open');
-  const closeBtn=genModal? genModal.querySelector('.close-gen'):null;
-  if(openBtn&&genModal){openBtn.addEventListener('click',()=>{genModal.hidden=false; setTimeout(()=>document.getElementById('yearInput')?.focus(),40);});}
-  if(closeBtn){closeBtn.addEventListener('click',()=>genModal.hidden=true);} 
-  genModal?.addEventListener('click',e=>{if(e.target===genModal) genModal.hidden=true;});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape' && !genModal.hidden) genModal.hidden=true;});
-  // Generate form logic
-  const genForm=document.getElementById('genSPPForm'); if(genForm){
-    const yearInput=document.getElementById('yearInput');
-    const monthInput=document.getElementById('monthInput');
-    const hiddenPeriod=document.getElementById('periodInput');
-    const amountInput=document.getElementById('amountInput');
-    const amountPreview=document.getElementById('amountPreview');
-    const dueInput=document.getElementById('dueDateInput');
-    const autoDue=document.getElementById('autoDueEnd');
-    function syncPeriod(){ const y=yearInput.value; const m=monthInput.value; if(y&&m){ hiddenPeriod.value = y+m; } if(autoDue.checked) setAutoDue(); }
-    function setAutoDue(){ const y=parseInt(yearInput.value,10); const m=parseInt(monthInput.value,10); if(!y||!m) return; const ld=new Date(y,m,0).getDate(); dueInput.value=`${y}-${String(m).padStart(2,'0')}-${String(ld).padStart(2,'0')}`; }
-    yearInput.addEventListener('change',syncPeriod); monthInput.addEventListener('change',syncPeriod);
-    amountInput.addEventListener('input',()=>{ const v=parseInt(amountInput.value||'0',10)||0; amountPreview.textContent='Rp '+v.toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.'); });
-    genForm.querySelector('.end-month').addEventListener('click',()=>{ setAutoDue(); autoDue.checked=false; });
-    genForm.querySelector('.plus7').addEventListener('click',()=>{ const base= dueInput.value? new Date(dueInput.value): new Date(); base.setDate(base.getDate()+7); dueInput.value=base.toISOString().slice(0,10); autoDue.checked=false; });
-    autoDue.addEventListener('change',()=>{ if(autoDue.checked) setAutoDue(); });
-    syncPeriod(); if(autoDue.checked) setAutoDue();
-  }
-  // Filter period logic
+  // Hanya logika filter periode (fitur generate SPP dihapus)
   const filterForm=document.getElementById('filterInvoiceForm'); if(filterForm){
     const fy=document.getElementById('fYear'); const fm=document.getElementById('fMonth'); const hidden=document.getElementById('fPeriodHidden');
-  function rebuild(){ const y=(fy.value||'').trim(); const m=(fm.value||'').trim(); if(y && m){ hidden.value=y+ m; } else { hidden.value=''; } }
-  fy?.addEventListener('change',rebuild); fm?.addEventListener('change',rebuild);
+    const fType=document.getElementById('fType');
+    function rebuild(){
+      const y=(fy.value||'').trim(); const m=(fm.value||'').trim(); const t=fType?fType.value:'spp';
+      if(t==='daftar_ulang'){
+        hidden.value = y || '';
+      } else if(t==='spp'){
+        hidden.value = (y && m)? (y+m): '';
+      } else { // all
+        hidden.value = (y && m)? (y+m): '';
+      }
+      toggleMonth();
+    }
+    function toggleMonth(){ const t=fType?fType.value:'spp'; if(t==='daftar_ulang'){ fm.parentElement.style.display='none'; } else { fm.parentElement.style.display=''; } }
+    fy?.addEventListener('change',rebuild); fm?.addEventListener('change',rebuild); fType?.addEventListener('change',rebuild);
     rebuild();
   }
 })();

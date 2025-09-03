@@ -8,18 +8,24 @@ $uid = (int)($_SESSION['user_id'] ?? 0);
 
 $bulan = $_GET['bulan'] ?? '';
 $tahun = $_GET['tahun'] ?? '';
+// Daftar tahun unik (semua jenis tagihan)
 $years = [];
-$q = mysqli_query($conn, "SELECT DISTINCT LEFT(period,4) y FROM invoice WHERE user_id=$uid AND type='spp' ORDER BY y DESC");
+$q = mysqli_query($conn, "SELECT DISTINCT LEFT(period,4) y FROM invoice WHERE user_id=$uid ORDER BY y DESC");
 while($q && ($row = mysqli_fetch_row($q))) $years[] = $row[0];
-$where = 'user_id=? AND type="spp"'; $params=[$uid]; $types='i';
-if($bulan && $tahun) {
-  $period = $tahun . str_pad($bulan,2,'0',STR_PAD_LEFT);
-  $where.=' AND period=?'; $params[]=$period; $types.='s';
-} else {
-  $period = '';
+
+// Bangun kondisi dinamis: tampilkan SEMUA tagihan (semua type & status)
+$conds = ['user_id=?']; $params=[$uid]; $types='i';
+if($tahun !== '' && preg_match('/^[0-9]{4}$/',$tahun)) { $conds[]='LEFT(period,4)=?'; $params[]=$tahun; $types.='s'; }
+if($bulan !== '' && ctype_digit($bulan)) {
+  $bulanDig = str_pad((int)$bulan,2,'0',STR_PAD_LEFT);
+  // bulan hanya relevan utk period format YYYYMM (panjang 6)
+  $conds[] = '(CHAR_LENGTH(period)=6 AND SUBSTR(period,5,2)=?)';
+  $params[] = $bulanDig; $types.='s';
 }
+$where = implode(' AND ',$conds);
 $page = max(1,(int)($_GET['page'] ?? 1)); $perPage=100; $offset=($page-1)*$perPage; if($offset>5000) $offset=5000;
-$sql = "SELECT * FROM invoice WHERE $where ORDER BY id DESC LIMIT $perPage OFFSET $offset";
+$order = 'ORDER BY id DESC';
+$sql = "SELECT * FROM invoice WHERE $where $order LIMIT $perPage OFFSET $offset";
 $total=0; $csql="SELECT COUNT(*) c FROM invoice WHERE $where"; if($cstmt=mysqli_prepare($conn,$csql)){ mysqli_stmt_bind_param($cstmt,$types,...$params); mysqli_stmt_execute($cstmt); $cr=mysqli_stmt_get_result($cstmt); if($cr && ($crow=mysqli_fetch_assoc($cr))) $total=(int)$crow['c']; }
 $totalPages = max(1,(int)ceil($total/$perPage)); if($page>$totalPages) $page=$totalPages;
 $rows=[]; if($stmt=mysqli_prepare($conn,$sql)){ mysqli_stmt_bind_param($stmt,$types,...$params); mysqli_stmt_execute($stmt); $r=mysqli_stmt_get_result($stmt); while($r && $row=mysqli_fetch_assoc($r)) $rows[]=$row; }
@@ -27,7 +33,7 @@ require_once BASE_PATH.'/src/includes/header.php';
 ?>
 <div class="page-shell">
   <div class="content-header">
-    <h1>Tagihan SPP</h1>
+  <h1>Semua Tagihan</h1>
     <div class="actions"><a href="kirim_saku.php" class="btn-action outline" style="text-decoration:none">Top-Up Wallet</a></div>
   </div>
   <div class="panel section">
@@ -58,24 +64,21 @@ require_once BASE_PATH.'/src/includes/header.php';
     <h2>Daftar Tagihan</h2>
     <div class="table-wrap invoice-table-desktop">
       <table class="table table-compact" style="min-width:680px">
-        <thead><tr><th>ID</th><th>Periode</th><th>Nominal</th><th>Dibayar</th><th>Status</th><th>Jatuh Tempo</th><th>Aksi</th></tr></thead>
+        <thead><tr><th>ID</th><th>Jenis</th><th>Periode</th><th>Nominal</th><th>Dibayar</th><th>Status</th><th>Jatuh Tempo</th><th>Aksi</th></tr></thead>
         <tbody>
         <?php if(!$rows): ?>
-          <tr><td colspan="7" style="text-align:center;font-size:13px;color:#777">Belum ada tagihan.</td></tr>
+          <tr><td colspan="8" style="text-align:center;font-size:13px;color:#777">Belum ada tagihan.</td></tr>
         <?php else: foreach($rows as $inv): ?>
           <tr>
             <td>#<?= (int)$inv['id'] ?></td>
+            <td><?= e(strtoupper(str_replace('_',' ',$inv['type']))) ?></td>
             <td><?= e($inv['period']) ?></td>
             <td>Rp <?= number_format($inv['amount'],0,',','.') ?></td>
             <td>Rp <?= number_format($inv['paid_amount'],0,',','.') ?></td>
-            <td><span class="status-<?= e(str_replace('_','-',$inv['status'])) ?>"><?= e(ucfirst($inv['status'])) ?></span></td>
+            <td><span class="status-<?= e(str_replace('_','-',$inv['status'])) ?><?= $inv['status']==='overdue'?' warn':'' ?>"><?= e(ucfirst($inv['status'])) ?></span></td>
             <td><?= e($inv['due_date']) ?></td>
             <td>
-              <?php if(in_array($inv['status'],['pending','partial'])): ?>
                 <a href="invoice_detail.php?id=<?= (int)$inv['id'] ?>" class="btn-detail">Bayar</a>
-              <?php else: ?>
-                <span style="font-size:11px;color:#666;font-weight:600">-</span>
-              <?php endif; ?>
             </td>
           </tr>
         <?php endforeach; endif; ?>
@@ -91,8 +94,12 @@ require_once BASE_PATH.'/src/includes/header.php';
         <div class="invoice-entry-mobile">
           <div class="im-id">#<?= (int)$inv['id'] ?></div>
           <div class="im-row">
+            <span class="im-label">Jenis</span>
+            <span class="im-value"><?= e(strtoupper(str_replace('_',' ',$inv['type']))) ?></span>
+          </div>
+          <div class="im-row">
             <span class="im-label">Status</span>
-            <span class="im-status status-<?= e(str_replace('_','-',$inv['status'])) ?>"><?= e(ucfirst($inv['status'])) ?></span>
+            <span class="im-status status-<?= e(str_replace('_','-',$inv['status'])) ?><?= $inv['status']==='overdue'?' warn':'' ?>"><?= e(ucfirst($inv['status'])) ?></span>
           </div>
           <div class="im-row">
             <span class="im-label">Nominal</span>
@@ -111,11 +118,7 @@ require_once BASE_PATH.'/src/includes/header.php';
             <span class="im-value"><?= e($inv['due_date']) ?></span>
           </div>
           <div class="im-action">
-            <?php if(in_array($inv['status'],['pending','partial'])): ?>
               <a href="invoice_detail.php?id=<?= (int)$inv['id'] ?>" class="btn-detail">Bayar Tagihan</a>
-            <?php else: ?>
-              <span style="font-size:11px;color:#666;font-weight:600">-</span>
-            <?php endif; ?>
           </div>
         </div>
       <?php endforeach; endif; ?>

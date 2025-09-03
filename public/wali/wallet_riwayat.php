@@ -102,4 +102,19 @@ require_once __DIR__.'/../../src/includes/header.php';
     <?php endif; ?>
   </div>
 </main>
+<script>
+(function(){
+  const uid = <?php echo (int)$userId; ?>;
+  function fmt(n){ return 'Rp '+Number(n||0).toLocaleString('id-ID'); }
+  function applySaldo(v){
+    const box = document.querySelector('h2 + div[style*="font-size:30px"]');
+    if(box){ box.textContent = fmt(v); }
+  }
+  window.addEventListener('storage', function(ev){
+    if(ev.key==='wallet_update' && ev.newValue){
+      try{ const d=JSON.parse(ev.newValue); if(String(d.uid)===String(uid)){ applySaldo(d.saldo); } }catch(e){}
+    }
+  });
+})();
+</script>
 <?php require_once __DIR__.'/../../src/includes/footer.php'; ?>

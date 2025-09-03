@@ -188,7 +188,16 @@ function try_db_connect(array $hosts, $user, $pass, $db, bool $dev): mysqli
         // 2) Now try connect directly to target DB
         $conn = @mysqli_connect($h, $user, $pass, $db);
         if ($conn) {
-            if(defined('AUTO_MIGRATE_RUNTIME') && AUTO_MIGRATE_RUNTIME){ ensure_schema($conn); }
+            if(defined('AUTO_MIGRATE_RUNTIME') && AUTO_MIGRATE_RUNTIME){
+                ensure_schema($conn);
+            } else {
+                // Deteksi minimal: jika tabel invoice belum ada, jalankan ensure_schema sekali
+                $need = false;
+                if($chk=@mysqli_query($conn, "SHOW TABLES LIKE 'invoice'")){
+                    if(mysqli_num_rows($chk)==0){ $need=true; }
+                } else { $need=true; }
+                if($need){ ensure_schema($conn); }
+            }
             return $conn;
         }
 
@@ -202,7 +211,11 @@ function try_db_connect(array $hosts, $user, $pass, $db, bool $dev): mysqli
             @mysqli_close($serverConn2);
             $conn2 = @mysqli_connect($h, $user, $pass, $db);
             if ($conn2) {
-                if(defined('AUTO_MIGRATE_RUNTIME') && AUTO_MIGRATE_RUNTIME){ ensure_schema($conn2); }
+                if(defined('AUTO_MIGRATE_RUNTIME') && AUTO_MIGRATE_RUNTIME){
+                    ensure_schema($conn2);
+                } else {
+                    $need=false; if($chk=@mysqli_query($conn2, "SHOW TABLES LIKE 'invoice'")){ if(mysqli_num_rows($chk)==0) $need=true; } else $need=true; if($need) ensure_schema($conn2);
+                }
                 return $conn2;
             }
         }

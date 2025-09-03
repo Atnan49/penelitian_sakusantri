@@ -1,5 +1,17 @@
 <?php
-// Middleware sesi: memastikan pengguna terautentikasi dan mengelola timeout
+// Middleware sesi: memastikan pengguna terautentikasi dan mengelola timeout.
+// Pastikan bootstrap inti sudah dimuat agar BASE_URL dan helper url() tersedia.
+if (!defined('BASE_PATH')) {
+    define('BASE_PATH', realpath(__DIR__ . '/../../'));
+}
+// Jika init belum pernah dimuat (BASE_URL belum terdefinisi), muat sekarang.
+if (!defined('BASE_URL')) {
+    $init = __DIR__ . '/init.php';
+    if (is_file($init)) {
+        require_once $init; // ini juga akan start session dengan parameter aman
+    }
+}
+// Jika setelah itu sesi masih belum aktif (fallback), start manual.
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
@@ -12,7 +24,13 @@ function force_logout() {
         setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
     }
     session_destroy();
-    $to = (defined('BASE_URL') ? rtrim(BASE_URL, '/') : '') . '/login?pesan=sesi_berakhir';
+    // Gunakan helper url() bila tersedia untuk konsistensi path.
+    if (function_exists('url')) {
+        $to = url('login?pesan=sesi_berakhir');
+    } else {
+        $base = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+        $to = $base . '/login?pesan=sesi_berakhir';
+    }
     header('Location: ' . $to);
     exit();
 }

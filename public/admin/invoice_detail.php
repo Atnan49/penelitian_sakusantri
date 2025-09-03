@@ -49,6 +49,18 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
       $res = payment_reversal($conn,$pid,(int)($_SESSION['user_id']??null),'admin reversal');
       if(!$res['ok']) $err=$res['msg']; else $msg=$res['msg'];
     }
+  } else if($do==='confirm_payment'){
+    $pid = (int)($_POST['payment_id'] ?? 0);
+    if(!$pid) $err='Payment tidak valid'; else {
+      $res = payment_confirm($conn,$pid,(int)($_SESSION['user_id']??null),'admin confirm');
+      if(!$res['ok']) $err=$res['msg']; else $msg=$res['msg'];
+    }
+  } else if($do==='reject_payment'){
+    $pid = (int)($_POST['payment_id'] ?? 0);
+    if(!$pid) $err='Payment tidak valid'; else {
+      $res = payment_update_status($conn,$pid,'rejected',(int)($_SESSION['user_id']??null),'admin reject');
+      if(!$res) $err='Gagal menolak pembayaran'; else $msg='Pembayaran ditolak';
+    }
   }
   // reload after post
   if($msg && !$err){ header('Location: invoice_detail.php?id='.$iid.'&msg='.urlencode($msg)); exit; }
@@ -57,104 +69,200 @@ if(isset($_GET['msg'])) $msg = $_GET['msg'];
 
 require_once BASE_PATH.'/src/includes/header.php';
 ?>
-<main class="container" style="padding-bottom:60px">
-  <a href="invoice.php" style="text-decoration:none;font-size:12px;color:#555">&larr; Kembali</a>
-  <h1 style="margin:8px 0 18px;font-size:26px">Invoice #<?= (int)$inv['id'] ?></h1>
-  <?php if($msg): ?><div class="alert success"><?= e($msg) ?></div><?php endif; ?>
-  <?php if($err): ?><div class="alert error"><?= e($err) ?></div><?php endif; ?>
-  <div class="tx-panel" style="margin-bottom:24px">
-    <div style="display:flex;flex-wrap:wrap;gap:30px">
-      <div style="flex:1 1 260px">
-        <h3 style="margin:0 0 8px;font-size:15px;letter-spacing:.5px">DATA INVOICE</h3>
-        <div class="meta-line"><span>Santri</span><b><?= e($inv['nama_santri']) ?></b></div>
-        <div class="meta-line"><span>Wali</span><b><?= e($inv['nama_wali']) ?></b></div>
-        <div class="meta-line"><span>Periode</span><b><?= e($inv['period']) ?></b></div>
-        <div class="meta-line"><span>Nominal</span><b>Rp <?= number_format($inv['amount'],0,',','.') ?></b></div>
-        <div class="meta-line"><span>Dibayar</span><b>Rp <?= number_format($inv['paid_amount'],0,',','.') ?></b></div>
-        <div class="meta-line"><span>Status</span><b><span class="status-<?= e($inv['status']) ?>"><?= e($inv['status']) ?></span></b></div>
-        <div class="meta-line"><span>Jatuh Tempo</span><b><?= e($inv['due_date']) ?></b></div>
-        <div class="meta-line"><span>Dibuat</span><b><?= e($inv['created_at']) ?></b></div>
-        <?php if($inv['updated_at']): ?><div class="meta-line"><span>Update</span><b><?= e($inv['updated_at']) ?></b></div><?php endif; ?>
+<main class="alternative-layout">
+  <aside class="sidebar">
+    <!-- Sidebar content remains unchanged -->
+  </aside>
+  <div class="invoice-content">
+    <header class="invoice-header">
+      <a href="invoice.php" class="back-link">&larr; Kembali</a>
+      <h1>Invoice #<?= (int)$inv['id'] ?></h1>
+    </header>
+
+    <?php if($msg): ?><div class="alert success">✅ <?= e($msg) ?></div><?php endif; ?>
+    <?php if($err): ?><div class="alert error">❌ <?= e($err) ?></div><?php endif; ?>
+
+    <!-- Display error message if exists -->
+    <?php if (!empty($err)): ?>
+      <div class="error-message"><?= htmlspecialchars($err) ?></div>
+    <?php endif; ?>
+
+    <!-- Display success message if exists -->
+    <?php if (!empty($msg)): ?>
+      <div class="success-message"><?= htmlspecialchars($msg) ?></div>
+    <?php endif; ?>
+
+    <section class="invoice-summary">
+      <div class="summary-card">
+        <h2>Data Invoice</h2>
+        <ul>
+          <li><strong>Santri:</strong> <?= e($inv['nama_santri']) ?></li>
+          <li><strong>Wali:</strong> <?= e($inv['nama_wali']) ?></li>
+          <li><strong>Periode:</strong> <?= e($inv['period']) ?></li>
+          <li><strong>Nominal:</strong> Rp <?= number_format($inv['amount'],0,',','.') ?></li>
+          <li><strong>Status:</strong> <span class="status-<?= e($inv['status']) ?>"><?= e($inv['status']) ?></span></li>
+        </ul>
       </div>
-      <div style="flex:1 1 300px">
-        <h3 style="margin:0 0 8px;font-size:15px">AKSI ADMIN</h3>
-        <form method="post" style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 16px">
-          <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-          <input type="hidden" name="do" value="new_manual_payment">
-          <input type="number" required step="1000" name="amount" placeholder="Nominal" style="padding:8px 10px;width:140px">
-          <button class="btn-action primary" style="padding:8px 18px">Tambah Payment</button>
-        </form>
-        <div style="font-size:11px;color:#666">Gunakan untuk input pembayaran yang dikirim manual / bukti fisik.</div>
+    </section>
+
+    <section class="payment-table">
+      <h2>Daftar Pembayaran</h2>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Metode</th>
+              <th>Nominal</th>
+              <th>Status</th>
+              <th>Tanggal</th>
+              <th>Bukti</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php if(!$payments): ?>
+              <tr><td colspan="7" class="no-data">Belum ada pembayaran.</td></tr>
+            <?php else: foreach($payments as $p): ?>
+              <tr>
+                <td>#<?= (int)$p['id'] ?></td>
+                <td><?= e($p['method']) ?></td>
+                <td>Rp <?= number_format($p['amount'],0,',','.') ?></td>
+                <td><span class="status-<?= e($p['status']) ?>"><?= e($p['status']) ?></span></td>
+                <td><?= e($p['created_at']) ?></td>
+                <td>
+                  <?php if(!empty($p['proof_file'])): ?>
+                    <a href="../uploads/payment_proof/<?= e($p['proof_file']) ?>" target="_blank">Lihat</a>
+                  <?php else: ?>-
+                  <?php endif; ?>
+                </td>
+                <td>
+                  <?php if($p['status'] === 'awaiting_confirmation'): ?>
+                    <form method="post" class="action-form" style="display:inline-block;">
+                      <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                      <input type="hidden" name="do" value="confirm_payment">
+                      <input type="hidden" name="payment_id" value="<?= (int)$p['id'] ?>">
+                      <button class="btn-confirm">Konfirmasi</button>
+                    </form>
+                    <form method="post" class="action-form" style="display:inline-block;">
+                      <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                      <input type="hidden" name="do" value="reject_payment">
+                      <input type="hidden" name="payment_id" value="<?= (int)$p['id'] ?>">
+                      <button class="btn-reject">Tolak</button>
+                    </form>
+                  <?php else: ?>
+                    -
+                  <?php endif; ?>
+                </td>
+              </tr>
+            <?php endforeach; endif; ?>
+          </tbody>
+        </table>
       </div>
-    </div>
-  </div>
-  <div class="panel" style="margin-bottom:28px">
-  <h2 style="margin:0 0 14px;font-size:18px">Payments</h2>
-    <div class="table-wrap" style="overflow-x:auto">
-      <table class="table" style="min-width:620px">
-  <thead><tr><th>ID</th><th>Method</th><th>Amount</th><th>Status</th><th>Created</th><th>Bukti</th><th>Aksi</th></tr></thead>
-        <tbody>
-        <?php if(!$payments): ?><tr><td colspan="6" style="text-align:center;font-size:12px;color:#777">Belum ada payment.</td></tr><?php else: foreach($payments as $p): ?>
-          <tr>
-            <td>#<?= (int)$p['id'] ?></td>
-            <td><?= e($p['method']) ?></td>
-            <td>Rp <?= number_format($p['amount'],0,',','.') ?></td>
-            <td><span class="status-<?= e($p['status']) ?>"><?= e($p['status']) ?></span></td>
-            <td><?= e($p['created_at']) ?></td>
-            <td style="font-size:11px">
-              <?php if(!empty($p['proof_file'])): ?>
-                <a href="../uploads/<?= e($p['proof_file']) ?>" target="_blank">Lihat</a>
-              <?php else: ?>-
-              <?php endif; ?>
-            </td>
-            <td style="white-space:nowrap;font-size:11px">
-              <form method="post" style="display:inline">
-                <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-                <input type="hidden" name="do" value="set_status">
-                <input type="hidden" name="payment_id" value="<?= (int)$p['id'] ?>">
-                <select name="to" style="padding:4px 6px;font-size:11px">
-                  <?php foreach(['awaiting_confirmation','settled','failed','reversed'] as $opt): if($opt===$p['status']) continue; ?>
-                    <option value="<?= $opt ?>"><?= $opt ?></option>
-                  <?php endforeach; ?>
-                </select>
-                <button style="padding:4px 8px;font-size:11px">Go</button>
-              </form>
-              <?php if($p['status']==='settled'): ?>
-                <form method="post" style="display:inline" onsubmit="return confirm('Reverse payment #<?= (int)$p['id'] ?>?')">
-                  <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-                  <input type="hidden" name="do" value="reverse_payment">
-                  <input type="hidden" name="payment_id" value="<?= (int)$p['id'] ?>">
-                  <button style="padding:4px 8px;font-size:11px;background:#b91c1c;color:#fff">Reverse</button>
-                </form>
-              <?php endif; ?>
-            </td>
-          </tr>
-        <?php endforeach; endif; ?>
-        </tbody>
-      </table>
-    </div>
-  </div>
-  <div class="panel" style="margin-bottom:28px">
-    <h2 style="margin:0 0 14px;font-size:18px">Riwayat Invoice</h2>
-    <ul style="list-style:none;padding:0;margin:0;max-height:260px;overflow:auto">
-      <?php if(!$hist_inv): ?><li style="font-size:12px;color:#777">Belum ada.</li><?php else: foreach($hist_inv as $h): ?>
-        <li style="padding:6px 4px;border-bottom:1px solid #eee;font-size:12px">
-          <b><?= e($h['from_status'] ?: '-') ?> &rarr; <?= e($h['to_status']) ?></b> <span style="color:#666">(<?= e($h['created_at']) ?>)</span>
-          <?php if($h['note']): ?><i style="color:#999"> - <?= e($h['note']) ?></i><?php endif; ?>
-        </li>
-      <?php endforeach; endif; ?>
-    </ul>
-  </div>
-  <div class="panel">
-    <h2 style="margin:0 0 14px;font-size:18px">Riwayat Payment</h2>
-    <ul style="list-style:none;padding:0;margin:0;max-height:260px;overflow:auto">
-      <?php if(!$hist_pay): ?><li style="font-size:12px;color:#777">Belum ada.</li><?php else: foreach($hist_pay as $h): ?>
-        <li style="padding:6px 4px;border-bottom:1px solid #eee;font-size:12px">
-          <b>Payment #<?= (int)$h['payment_id'] ?>: <?= e($h['from_status'] ?: '-') ?> &rarr; <?= e($h['to_status']) ?></b> <span style="color:#666">(<?= e($h['created_at']) ?>)</span>
-          <?php if($h['note']): ?><i style="color:#999"> - <?= e($h['note']) ?></i><?php endif; ?>
-        </li>
-      <?php endforeach; endif; ?>
-    </ul>
+    </section>
   </div>
 </main>
+
+<style>
+  .alternative-layout {
+    display: flex;
+    gap: 20px;
+  }
+  .invoice-content {
+    flex: 1;
+    margin-left: 20px;
+    padding: 20px;
+    background: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  .invoice-header {
+    margin-bottom: 20px;
+  }
+  .invoice-header h1 {
+    font-size: 28px;
+    color: #333;
+  }
+  .summary-card {
+    background: #f7f7f7;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+  }
+  .summary-card ul {
+    list-style: none;
+    padding: 0;
+  }
+  .summary-card li {
+    margin-bottom: 10px;
+    font-size: 16px;
+    color: #555;
+  }
+  .summary-card strong {
+    color: #222;
+  }
+  .payment-table {
+    margin-top: 20px;
+  }
+  .table-container {
+    overflow-x: auto;
+  }
+  .payment-table table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .payment-table th, .payment-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+  }
+  .payment-table th {
+    background: #f4f4f4;
+    font-weight: bold;
+  }
+  .payment-table .no-data {
+    text-align: center;
+    color: #999;
+  }
+  .status-awaiting_confirmation {
+    color: #ff9800;
+  }
+  .status-settled {
+    color: #4caf50;
+  }
+  .status-failed {
+    color: #f44336;
+  }
+  .status-reversed {
+    color: #2196f3;
+  }
+  .btn-confirm {
+    padding: 8px 12px;
+    font-size: 14px;
+    color: #fff;
+    background: #4caf50;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .btn-confirm:hover {
+    background: #45a049;
+  }
+  .btn-reject {
+    padding: 8px 12px;
+    font-size: 14px;
+    color: #fff;
+    background: #f44336;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .btn-reject:hover {
+    background: #e53935;
+  }
+</style>
 <?php require_once BASE_PATH.'/src/includes/footer.php'; ?>

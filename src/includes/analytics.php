@@ -22,15 +22,17 @@ if(!function_exists('analytics_dashboard_core')){
     static $cache=null; if($cache!==null) return $cache;
     $invoice = ['pending'=>0,'partial'=>0,'overdue'=>0,'paid'=>0,'canceled'=>0];
     $total_wali=0; $total_saldo=0.0; $outstanding=0.0; $pending_invoice=0; $pending_topup=0;
+    $invoice_total_amount = 0.0; // total nominal seluruh tagihan SPP (semua status)
     // Total wali
     if($rs=mysqli_query($conn,"SELECT COUNT(id) c FROM users WHERE role='wali_santri'")){ $total_wali=(int)(mysqli_fetch_assoc($rs)['c']??0); }
     // Total saldo (cached di users.saldo)
     if($rs=mysqli_query($conn,"SELECT SUM(saldo) s FROM users")){ $total_saldo=(float)(mysqli_fetch_assoc($rs)['s']??0); }
-    // Invoice status counts + outstanding
-    if($rs=mysqli_query($conn,"SELECT status, COUNT(*) c, SUM(amount-paid_amount) os FROM invoice GROUP BY status")){
+  // Invoice status counts + outstanding + total nominal
+  if($rs=mysqli_query($conn,"SELECT status, COUNT(*) c, SUM(amount-paid_amount) os, SUM(amount) ta FROM invoice GROUP BY status")){
       while($r=mysqli_fetch_assoc($rs)){
         $st=$r['status']; if(isset($invoice[$st])){ $invoice[$st]=(int)$r['c']; }
         if(in_array($st,['pending','partial','overdue'],true)) $outstanding += (float)($r['os']??0);
+    $invoice_total_amount += (float)($r['ta']??0);
       }
     }
     // Pending payments (invoice linked vs top-up) statuses awaiting admin action
@@ -45,11 +47,12 @@ if(!function_exists('analytics_dashboard_core')){
       'total_saldo'=>$total_saldo,
       'invoice'=>$invoice,
       'outstanding'=>$outstanding,
-      'payments'=>[
+  'payments'=>[
         'pending_invoice'=>$pending_invoice,
         'pending_topup'=>$pending_topup,
         'pending_total'=>$pending_invoice+$pending_topup
-      ]
+  ],
+  'invoice_total_amount'=>$invoice_total_amount
     ];
     return $cache;
   }

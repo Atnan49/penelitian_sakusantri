@@ -22,6 +22,19 @@ $tahun_pilih = (int)($_GET['year'] ?? date('Y'));
 if($tahun_pilih < date('Y')-1 || $tahun_pilih > date('Y')+5){ $tahun_pilih = (int)date('Y'); }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  // DEBUG: log semua input POST dan error utama ke file dan ke layar (sementara)
+  $debug_log = __DIR__ . '/debug_buat_tagihan.log';
+  $debug_data = [
+    'datetime' => date('Y-m-d H:i:s'),
+    'POST' => $_POST,
+    'pesan' => $pesan,
+    'pesan_error' => $pesan_error,
+    'SERVER' => $_SERVER
+  ];
+  file_put_contents($debug_log, print_r($debug_data,1)."\n---\n", FILE_APPEND);
+  echo '<pre style="background:#ffe;border:1px solid #cc0;padding:8px;font-size:12px;">DEBUG:<br>';
+  print_r($debug_data);
+  echo '</pre>';
   $token = $_POST['csrf_token'] ?? '';
   if (!verify_csrf_token($token)) {
     $pesan_error = 'Token tidak valid.';
@@ -35,30 +48,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       elseif($jumlah_gen <= 0){ $pesan_error='Nominal harus > 0.'; }
       else {
         $desc = 'SPP Bulan '.$bulan_nama[$bulan_gen-1].' '.$tahun_gen;
-        // Cek duplikat (hanya yang belum dihapus)
-  $sqlDup = "SELECT COUNT(*) c FROM transaksi WHERE jenis_transaksi='spp' AND deskripsi=?".$deletedFilter;
-  $stmtC = mysqli_prepare($conn, $sqlDup);
-        if($stmtC){
-          mysqli_stmt_bind_param($stmtC,'s',$desc);
-          mysqli_stmt_execute($stmtC);
-          $resC = mysqli_stmt_get_result($stmtC);
-          $rowC = $resC?mysqli_fetch_assoc($resC):null;
-          $countExist = $rowC? (int)$rowC['c'] : 0;
-          if($countExist>0){
-            $pesan_error = 'Tagihan bulan tersebut sudah dibuat.';
-          } else {
-            $res_users = mysqli_query($conn, "SELECT id FROM users WHERE role='wali_santri'");
-            $stmtIns = mysqli_prepare($conn, "INSERT INTO transaksi (user_id, jenis_transaksi, deskripsi, jumlah, status) VALUES (?, 'spp', ?, ?, 'menunggu_pembayaran')");
-            if($res_users && $stmtIns){
-              while($u = mysqli_fetch_assoc($res_users)){
-                $uid = (int)$u['id'];
+        // Ambil semua user wali_santri
+        $res_users = mysqli_query($conn, "SELECT id FROM users WHERE role='wali_santri'");
+        if($res_users){
+          $created = 0;
+          $stmtCheck = mysqli_prepare($conn, "SELECT COUNT(*) FROM transaksi WHERE user_id=? AND jenis_transaksi='spp' AND deskripsi=?".$deletedFilter);
+          $stmtIns = mysqli_prepare($conn, "INSERT INTO transaksi (user_id, jenis_transaksi, deskripsi, jumlah, status) VALUES (?, 'spp', ?, ?, 'menunggu_pembayaran')");
+          if($stmtCheck && $stmtIns){
+            while($u = mysqli_fetch_assoc($res_users)){
+              $uid = (int)$u['id'];
+              // Cek apakah user ini sudah punya tagihan bulan ini
+              mysqli_stmt_reset($stmtCheck);
+              mysqli_stmt_bind_param($stmtCheck, 'is', $uid, $desc);
+              mysqli_stmt_execute($stmtCheck);
+              $exists = false;
+              $countChk = 0;
+              if (function_exists('mysqli_stmt_get_result')) {
+                $resChk = mysqli_stmt_get_result($stmtCheck);
+                $rowChk = $resChk ? mysqli_fetch_row($resChk) : null;
+                $exists = $rowChk && $rowChk[0] > 0;
+              } else {
+                mysqli_stmt_bind_result($stmtCheck, $countChk);
+                if (mysqli_stmt_fetch($stmtCheck)) {
+                  $exists = $countChk > 0;
+                }
+                mysqli_stmt_free_result($stmtCheck);
+              }
+              if(!$exists){
+                mysqli_stmt_reset($stmtIns);
                 mysqli_stmt_bind_param($stmtIns,'isd',$uid,$desc,$jumlah_gen);
                 mysqli_stmt_execute($stmtIns);
+                if(mysqli_stmt_affected_rows($stmtIns)>0){ $created++; }
               }
-              $pesan = 'Tagihan SPP '.$bulan_nama[$bulan_gen-1].' '.$tahun_gen.' berhasil dibuat.';
-            } else { $pesan_error='Gagal membuat tagihan untuk bulan tersebut.'; }
-          }
-        } else { $pesan_error='Query cek duplikat gagal.'; }
+            }
+            if($created>0){
+              $pesan = 'Tagihan SPP '.$bulan_nama[$bulan_gen-1].' '.$tahun_gen.' berhasil dibuat untuk '.$created.' wali.';
+            } else {
+              $pesan_error = 'Semua wali sudah memiliki tagihan bulan ini.';
+            }
+          } else { $pesan_error='Gagal menyiapkan query.'; }
+        } else { $pesan_error='Gagal mengambil data wali santri.'; }
       }
     }
     // UPDATE NOMINAL: ubah jumlah tagihan bulan tertentu (hanya yang status menunggu_pembayaran)
@@ -169,7 +198,7 @@ require_once __DIR__ . '/../../src/includes/header.php';
       </form>
     </div>
     <div style="margin:12px 0 18px;font-size:12px;color:#666;line-height:1.5">Klik tombol bulan untuk membuat tagihan bagi SEMUA wali santri. Sistem otomatis menolak duplikasi jika bulan sudah dibuat. Gunakan tombol Update untuk mengubah nominal (hanya mempengaruhi tagihan yang masih berstatus menunggu_pembayaran).</div>
-    <form id="quickGenForm" method="POST" style="display:none">
+  <form id="quickGenForm" method="POST" style="display:none">
       <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(),ENT_QUOTES,'UTF-8'); ?>" />
       <input type="hidden" name="bulan_gen" id="bulan_gen" />
       <input type="hidden" name="tahun_gen" value="<?php echo $tahun_pilih; ?>" />
@@ -202,7 +231,7 @@ require_once __DIR__ . '/../../src/includes/header.php';
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <?php if(!$created): ?>
-              <button type="button" class="btn-action primary" style="flex:1;padding:6px 8px;font-size:11px" onclick="submitGenerate(<?php echo $i; ?>)">Generate</button>
+              <button type="button" class="btn-action primary" style="flex:1;padding:6px 8px;font-size:11px" onclick="window.submitGenerate ? submitGenerate(<?php echo $i; ?>) : document.getElementById('quickGenForm').submit();">Generate</button>
             <?php else: ?>
               <button type="button" class="btn-action" style="flex:1;padding:6px 8px;font-size:11px;background:#5e765c;color:#fff" onclick="submitUpdate(<?php echo $i; ?>)">Update Nominal</button>
             <?php endif; ?>
@@ -227,7 +256,7 @@ require_once __DIR__ . '/../../src/includes/header.php';
             <td><?php echo $r['tanggal_upload']?date('d M Y H:i',strtotime($r['tanggal_upload'])):'-'; ?></td>
             <td>
               <?php if($r['status']==='menunggu_pembayaran'): ?>
-                <form method="POST" style="display:inline" onsubmit="return confirm('Hapus tagihan ini?');">
+                <form method="POST" style="display:inline" data-confirm="Hapus tagihan ini?">
                   <input type="hidden" name="hapus_id" value="<?php echo (int)$r['id']; ?>" />
                   <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(),ENT_QUOTES,'UTF-8'); ?>" />
                   <button type="submit" class="btn-inline" style="color:#c0392b;font-size:11px;font-weight:600">Hapus</button>
@@ -246,31 +275,8 @@ require_once __DIR__ . '/../../src/includes/header.php';
   </div>
 </main>
 <?php require_once __DIR__ . '/../../src/includes/footer.php'; ?>
-<script nonce="<?= htmlspecialchars($GLOBALS['SCRIPT_NONCE'] ?? '',ENT_QUOTES,'UTF-8'); ?>">
-(function(){
-  // QUICK GENERATE JS ONLY (manual form removed)
-  function onlyDigits(s){return (s||'').replace(/[^0-9]/g,'');}
-  const qDisp=document.getElementById('quickNominalDisplay');
-  const qVal=document.getElementById('quickNominal');
-  function fmt(n){return 'Rp '+ (Number(n)||0).toLocaleString('id-ID');}
-  function sync(){if(!qDisp)return; const v=parseInt(onlyDigits(qDisp.value),10)||0;qVal.value=v;qDisp.value=fmt(v);} 
-  if(qDisp){qDisp.addEventListener('input',sync);qDisp.addEventListener('blur',sync);sync();}
-  window.submitGenerate=function(m){
-    const v=parseInt(qVal.value,10)||0; if(!v){alert('Nominal belum diisi');return;}
-    if(!confirm('Generate tagihan bulan ini?')) return;
-    document.getElementById('bulan_gen').value=m;
-    document.getElementById('jumlah_gen').value=v;
-    document.getElementById('quickGenForm').submit();
-  };
-  window.submitUpdate=function(m){
-    const v=parseInt(qVal.value,10)||0; if(!v){alert('Nominal belum diisi');return;}
-    if(!confirm('Update nominal tagihan bulan ini? Hanya mempengaruhi yang menunggu pembayaran.')) return;
-    document.getElementById('bulan_gen_up').value=m;
-    document.getElementById('jumlah_gen_up').value=v;
-    document.getElementById('quickUpdateForm').submit();
-  };
-})();
-</script>
+<script src="assets/js/buat_tagihan.js" defer data-require-script="buat_tagihan"></script>
+<div id="jsErrorMsg" style="display:none;color:#c00;background:#fee;padding:8px;margin:12px 0;font-size:14px;font-weight:bold">JS gagal dimuat! Cek path <b>assets/js/buat_tagihan.js</b> dan pastikan file ada.</div>
 <style>
 /* Amplify typography & width for SPP create page */
 .spp-create .admin-heading{font-size:32px;}

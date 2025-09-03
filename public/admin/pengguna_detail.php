@@ -19,7 +19,7 @@ if(!$stmt){ die('DB err'); }
 mysqli_stmt_bind_param($stmt,'i',$id); mysqli_stmt_execute($stmt); $resU = mysqli_stmt_get_result($stmt); $user = $resU?mysqli_fetch_assoc($resU):null;
 if(!$user){ header('Location: '.url('admin/pengguna')); exit; }
 
-// Hapus tagihan SPP individual (hanya status menunggu_pembayaran)
+// Hapus tagihan SPP individual (hanya status menunggu_pembayaran) -- akan dipertahankan untuk administrasi, tetapi fitur generate SPP dihapus.
 if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['aksi']??'')==='hapus_tagihan'){
   $token = $_POST['csrf_token'] ?? '';
   $tid = (int)($_POST['transaksi_id'] ?? 0);
@@ -51,58 +51,74 @@ if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['aksi']??'')==='hapus_tagihan'
   }
 }
 
-// Generate SPP tagihan (backfill) if requested
-if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['aksi']??'')==='generate_spp'){
-  $token = $_POST['csrf_token'] ?? '';
-  if(!verify_csrf_token($token)){
-    $pesan_error = 'Token tidak valid.';
-  } else {
-    $currentYear  = (int)date('Y');
-    $currentMonth = (int)date('n');
-    $bulanIndo = [1=>'Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-    // Ambil deskripsi existing utk user ini
-    $existing = [];
-  if($rsE = mysqli_query($conn, "SELECT deskripsi FROM transaksi WHERE user_id=$id AND jenis_transaksi='spp'")){
-      while($rw=mysqli_fetch_assoc($rsE)){ $existing[strtolower($rw['deskripsi'])]=true; }
-    }
-    $defaultNominal = 0.0;
-    if($rsLast = mysqli_query($conn, "SELECT jumlah FROM transaksi WHERE jenis_transaksi='spp' ORDER BY id DESC LIMIT 1")){
-      if($rowLast = mysqli_fetch_assoc($rsLast)){ $defaultNominal = (float)$rowLast['jumlah']; }
-    }
-    if($defaultNominal < 0) $defaultNominal = 0;
-    $insT = mysqli_prepare($conn, "INSERT INTO transaksi (user_id, jenis_transaksi, deskripsi, jumlah, status) VALUES (?, 'spp', ?, ?, 'menunggu_pembayaran')");
-    if($insT){
-      $created = 0;
-      for($m=$currentMonth;$m<=12;$m++){
-        $desc = 'SPP Bulan ' . $bulanIndo[$m] . ' ' . $currentYear;
-        if(isset($existing[strtolower($desc)])) continue; // skip existing
-        mysqli_stmt_bind_param($insT,'isd',$id,$desc,$defaultNominal);
-        mysqli_stmt_execute($insT);
-        if(mysqli_stmt_affected_rows($insT)>0) $created++;
-      }
-  add_notification($conn, $id, 'spp_backfill', 'Tagihan SPP '.$created.' bulan dibuat (backfill) untuk pengguna ini.');
-    $pesan = $created>0 ? ("Berhasil membuat $created tagihan SPP.") : 'Tidak ada tagihan baru (semua sudah ada).';
-    } else {
-      $pesan_error = 'Gagal menyiapkan query insert.';
-    }
-  }
-}
+// Fitur generate/backfill SPP dihapus.
 
 // Ambil daftar tagihan SPP terakhir (limit 12)
+// Dataset tagihan SPP model lama (table transaksi)
 $tagihan=[]; $rsT = mysqli_query($conn, "SELECT id, deskripsi, jumlah, status, tanggal_upload FROM transaksi WHERE user_id=$id AND jenis_transaksi='spp' $softWhere ORDER BY (status='menunggu_pembayaran') DESC, id DESC LIMIT 12");
 while($rsT && $r=mysqli_fetch_assoc($rsT)){ $tagihan[]=$r; }
+// Fallback ke sistem invoice baru jika tidak ada data transaksi SPP lama
+$invoice_fallback=[];
+if(empty($tagihan)){
+  // Fallback hanya invoice type SPP
+  if($rsInv = mysqli_query($conn, "SELECT id,type,period,amount,paid_amount,status,due_date,created_at FROM invoice WHERE user_id=$id AND type='spp' ORDER BY id DESC LIMIT 30")){
+    while($rsInv && $ri=mysqli_fetch_assoc($rsInv)){ $invoice_fallback[]=$ri; }
+  }
+}
 // Hitung tagihan belum bayar
 // Hitung total tagihan belum bayar (seluruh, tidak hanya 12 terbaru)
 $belum_bayar_total = 0; if($rsC = mysqli_query($conn, "SELECT COUNT(*) c FROM transaksi WHERE user_id=$id AND jenis_transaksi='spp' AND status='menunggu_pembayaran' $softWhere")){ if($rC = mysqli_fetch_assoc($rsC)) $belum_bayar_total=(int)$rC['c']; }
+// Jika model lama kosong & fallback invoice ada, gunakan hitungan unpaid invoice
+if($belum_bayar_total===0 && empty($tagihan) && !empty($invoice_fallback)){
+  $belum_bayar_total = 0;
+  foreach($invoice_fallback as $iv){ if(in_array($iv['status'],['pending','partial','overdue'],true)) $belum_bayar_total++; }
+}
 // Jumlah yang terlihat di list pendek
 $belum_bayar_visible = 0; foreach($tagihan as $t){ if($t['status']==='menunggu_pembayaran') $belum_bayar_visible++; }
+if($belum_bayar_visible===0 && empty($tagihan) && !empty($invoice_fallback)){
+  foreach($invoice_fallback as $iv){ if(in_array($iv['status'],['pending','partial','overdue'],true)) $belum_bayar_visible++; }
+}
 // Rekap saldo: ambil ledger (wallet_ledger) 30 terakhir
 $ledger=[]; $rsL = mysqli_query($conn, "SELECT id, direction, amount, ref_type, note, created_at FROM wallet_ledger WHERE user_id=$id ORDER BY id DESC LIMIT 60");
 while($rsL && $r=mysqli_fetch_assoc($rsL)){ $ledger[]=$r; }
-// Ambil ringkas semua tagihan menunggu (opsi global)
-$all_spp = [];
-$rsAll = mysqli_query($conn, "SELECT t.id, t.deskripsi, t.jumlah, t.status, t.tanggal_upload, u.nama_santri FROM transaksi t JOIN users u ON t.user_id=u.id WHERE t.jenis_transaksi='spp' AND t.deleted_at IS NULL ORDER BY t.id DESC LIMIT 120");
-while($rsAll && $r=mysqli_fetch_assoc($rsAll)){ $all_spp[]=$r; }
+// KUMPULKAN SEMUA TAGIHAN (legacy SPP + semua invoice baru) UNTUK USER INI
+$legacy_all=[]; $rsLegacyAll = mysqli_query($conn, "SELECT id, deskripsi, jumlah, status, tanggal_upload FROM transaksi WHERE user_id=$id AND jenis_transaksi='spp' $softWhere ORDER BY id DESC LIMIT 120");
+while($rsLegacyAll && $r=mysqli_fetch_assoc($rsLegacyAll)){ $legacy_all[]=$r; }
+$invoice_all=[]; if($rsInvAll = mysqli_query($conn, "SELECT id,type,period,amount,paid_amount,status,due_date,created_at FROM invoice WHERE user_id=$id ORDER BY id DESC LIMIT 200")){ while($rsInvAll && $ri=mysqli_fetch_assoc($rsInvAll)){ $invoice_all[]=$ri; } }
+// Normalisasi gabungan
+$combined_all=[];
+foreach($legacy_all as $lg){
+  $combined_all[]=[
+    'src'=>'legacy',
+    'id'=>$lg['id'],
+    'type'=>'spp',
+    'period'=>$lg['deskripsi'],
+    'amount'=>$lg['jumlah'],
+    'paid_amount'=>0,
+    'status'=>$lg['status'],
+    'due_date'=>'',
+    'created_at'=>$lg['tanggal_upload']?:null
+  ];
+}
+foreach($invoice_all as $iv){
+  $combined_all[]=[
+    'src'=>'invoice',
+    'id'=>$iv['id'],
+    'type'=>$iv['type'],
+    'period'=>$iv['period'],
+    'amount'=>$iv['amount'],
+    'paid_amount'=>$iv['paid_amount'],
+    'status'=>$iv['status'],
+    'due_date'=>$iv['due_date'],
+    'created_at'=>$iv['created_at']
+  ];
+}
+usort($combined_all,function($a,$b){
+  $ta=strtotime($a['created_at']??'1970-01-01');
+  $tb=strtotime($b['created_at']??'1970-01-01');
+  if($ta==$tb) return $b['id'] <=> $a['id'];
+  return $tb <=> $ta; // desc
+});
 require_once __DIR__ . '/../../src/includes/header.php';
 ?>
 <div class="page-shell pengguna-detail-page enhanced">
@@ -120,12 +136,13 @@ require_once __DIR__ . '/../../src/includes/header.php';
   <?php if($pesan): ?><div class="alert success" role="alert"><?= e($pesan) ?></div><?php endif; ?>
   <?php if($pesan_error): ?><div class="alert error" role="alert"><?= e($pesan_error) ?></div><?php endif; ?>
   <div class="tabs-wrap user-tabs">
-    <button class="tab-btn active" data-tab="spp">Tagihan SPP</button>
+  <button class="tab-btn active" data-tab="spp">Tagihan <?= empty($tagihan)&&!empty($invoice_fallback)?'Invoice':'' ?> SPP</button>
     <button class="tab-btn" data-tab="rekap">Rekap Saldo</button>
     <button class="tab-btn" data-tab="semua">Semua Tagihan</button>
   </div>
   <div class="tab-content active" id="tab-spp">
     <table class="t-spp">
+      <?php if(!empty($tagihan)): ?>
       <thead><tr><th>No</th><th>Bulan</th><th>Jumlah (Rp)</th><th>Status</th><th>Aksi</th></tr></thead>
       <tbody>
         <?php $i=1; foreach($tagihan as $t): $bulan = $t['deskripsi'] ?: date('M Y', strtotime($t['tanggal_upload']??'now')); ?>
@@ -136,7 +153,7 @@ require_once __DIR__ . '/../../src/includes/header.php';
             <td class="st-<?php echo $t['status']; ?>"><?php echo $t['status']; ?></td>
             <td>
               <?php if($t['status']==='menunggu_pembayaran'): ?>
-                <form method="POST" style="display:inline" onsubmit="return confirm('Hapus tagihan ini?');">
+                <form method="POST" style="display:inline" data-confirm="Hapus tagihan ini?">
                   <input type="hidden" name="aksi" value="hapus_tagihan" />
                   <input type="hidden" name="id" value="<?php echo (int)$id; ?>" />
                   <input type="hidden" name="transaksi_id" value="<?php echo (int)$t['id']; ?>" />
@@ -147,16 +164,27 @@ require_once __DIR__ . '/../../src/includes/header.php';
             </td>
           </tr>
         <?php endforeach; if(empty($tagihan)): ?>
-          <tr><td colspan="5" class="text-muted">
-            Belum ada tagihan. <form action="" method="POST" style="display:inline;margin-left:10px">
-              <input type="hidden" name="aksi" value="generate_spp" />
-              <input type="hidden" name="id" value="<?php echo (int)$id; ?>" />
-              <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(),ENT_QUOTES,'UTF-8'); ?>" />
-              <button type="submit" style="background:#5e765c;color:#fff;border:0;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer">Generate sisa tahun</button>
-            </form>
-          </td></tr>
+          <tr><td colspan="5" class="text-muted">Belum ada tagihan.</td></tr>
         <?php endif; ?>
       </tbody>
+      <?php else: // fallback invoice ?>
+      <thead><tr><th>No</th><th>Jenis</th><th>Periode</th><th>Nominal</th><th>Bayar</th><th>Status</th><th>Jatuh Tempo</th></tr></thead>
+      <tbody>
+        <?php if(!empty($invoice_fallback)): $i=1; foreach($invoice_fallback as $iv): $amt=(float)$iv['amount']; $paid=(float)$iv['paid_amount']; $ratio=$amt>0?min(1,$paid/$amt):0; $pct=round($ratio*100,1); ?>
+          <tr>
+            <td><?php echo $i++; ?></td>
+            <td><?php echo htmlspecialchars(strtoupper(str_replace('_',' ',$iv['type'])),ENT_QUOTES,'UTF-8'); ?></td>
+            <td><?php echo htmlspecialchars($iv['period']??'-',ENT_QUOTES,'UTF-8'); ?></td>
+            <td>Rp <?php echo number_format($amt,0,',','.'); ?></td>
+            <td>Rp <?php echo number_format($paid,0,',','.'); ?><?php if($paid>0 && $paid<$amt) echo ' ('.$pct.'%)'; ?></td>
+            <td class="st-<?php echo htmlspecialchars($iv['status'],ENT_QUOTES,'UTF-8'); ?>"><?php echo htmlspecialchars($iv['status'],ENT_QUOTES,'UTF-8'); ?></td>
+            <td><?php echo htmlspecialchars($iv['due_date']??'-',ENT_QUOTES,'UTF-8'); ?></td>
+          </tr>
+        <?php endforeach; else: ?>
+          <tr><td colspan="7" class="text-muted">Belum ada invoice.</td></tr>
+        <?php endif; ?>
+      </tbody>
+      <?php endif; ?>
     </table>
   </div>
   <div class="tab-content" id="tab-rekap">
@@ -196,19 +224,22 @@ require_once __DIR__ . '/../../src/includes/header.php';
     </div>
   </div>
   <div class="tab-content" id="tab-semua">
-    <table class="t-spp">
-      <thead><tr><th>No</th><th>Santri</th><th>Bulan</th><th>Jumlah (Rp)</th><th>Status</th><th>Aksi</th></tr></thead>
+    <table class="t-spp" style="min-width:880px">
+      <thead><tr><th>No</th><th>Jenis</th><th>Periode / Deskripsi</th><th>Nominal</th><th>Dibayar</th><th>Status</th><th>Jatuh Tempo</th><th>Sumber</th><th>Aksi</th></tr></thead>
       <tbody>
-        <?php $j=1; foreach($all_spp as $row): $bl = $row['deskripsi'] ?: date('M Y', strtotime($row['tanggal_upload']??'now')); ?>
+        <?php if($combined_all): $k=1; foreach($combined_all as $row): $amt=(float)$row['amount']; $paid=(float)$row['paid_amount']; $ratio=$amt>0?min(1,$paid/$amt):0; $pct=round($ratio*100,1); ?>
           <tr>
-            <td><?php echo $j++; ?></td>
-            <td><?php echo htmlspecialchars($row['nama_santri']); ?></td>
-            <td><?php echo htmlspecialchars($bl); ?></td>
-            <td><?php echo number_format($row['jumlah'],0,',','.'); ?></td>
-            <td class="st-<?php echo $row['status']; ?>"><?php echo $row['status']; ?></td>
+            <td><?php echo $k++; ?></td>
+            <td><?php echo htmlspecialchars(strtoupper(str_replace('_',' ',$row['type'])),ENT_QUOTES,'UTF-8'); ?></td>
+            <td><?php echo htmlspecialchars($row['period']??'-',ENT_QUOTES,'UTF-8'); ?></td>
+            <td>Rp <?php echo number_format($amt,0,',','.'); ?></td>
+            <td>Rp <?php echo number_format($paid,0,',','.'); ?><?php if($paid>0 && $paid<$amt) echo ' ('.$pct.'%)'; ?></td>
+            <td class="st-<?php echo htmlspecialchars($row['status'],ENT_QUOTES,'UTF-8'); ?>"><?php echo htmlspecialchars($row['status'],ENT_QUOTES,'UTF-8'); ?></td>
+            <td><?php echo htmlspecialchars($row['due_date']??'-',ENT_QUOTES,'UTF-8'); ?></td>
+            <td><?php echo $row['src']==='legacy'?'Transaksi Lama':'Invoice'; ?></td>
             <td>
-              <?php if($row['status']==='menunggu_pembayaran'): ?>
-                <form method="POST" style="display:inline" onsubmit="return confirm('Hapus tagihan ini?');">
+              <?php if($row['src']==='legacy' && $row['status']==='menunggu_pembayaran'): ?>
+                <form method="POST" style="display:inline" data-confirm="Hapus tagihan ini?">
                   <input type="hidden" name="aksi" value="hapus_tagihan" />
                   <input type="hidden" name="id" value="<?php echo (int)$id; ?>" />
                   <input type="hidden" name="transaksi_id" value="<?php echo (int)$row['id']; ?>" />
@@ -218,17 +249,12 @@ require_once __DIR__ . '/../../src/includes/header.php';
               <?php else: ?><span style="font-size:11px;color:#888">-</span><?php endif; ?>
             </td>
           </tr>
-        <?php endforeach; if(empty($all_spp)): ?>
-          <tr><td colspan="6" class="text-muted">Belum ada tagihan.</td></tr>
+        <?php endforeach; else: ?>
+          <tr><td colspan="9" class="text-muted">Belum ada tagihan.</td></tr>
         <?php endif; ?>
       </tbody>
     </table>
   </div>
 </div>
-<script nonce="<?= htmlspecialchars($GLOBALS['SCRIPT_NONCE'] ?? '',ENT_QUOTES,'UTF-8'); ?>">
-// Tab switching
-const tabBtns=document.querySelectorAll('.tab-btn');
-const tabContents=document.querySelectorAll('.tab-content');
-tabBtns.forEach(btn=>btn.addEventListener('click',()=>{tabBtns.forEach(b=>b.classList.remove('active'));btn.classList.add('active');const target=btn.getAttribute('data-tab');tabContents.forEach(c=>{c.classList.toggle('active', c.id==='tab-'+target);});}));
-</script>
+<?php /* Inline tab script removed due to CSP; handled globally in assets/js/ui.js */ ?>
 <?php require_once __DIR__ . '/../../src/includes/footer.php'; ?>

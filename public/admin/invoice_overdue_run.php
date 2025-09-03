@@ -31,7 +31,7 @@ require_once BASE_PATH.'/src/includes/header.php';
   <div class="panel">
     <h2 style="margin:0 0 14px;font-size:18px">Eksekusi</h2>
     <p style="font-size:13px;line-height:1.5;margin:0 0 14px">Menandai invoice dengan due_date lewat & status pending/partial menjadi <b>overdue</b>. Jalankan harian via cron idealnya.</p>
-    <form method="post" onsubmit="return confirm('Jalankan penandaan overdue sekarang?')">
+  <form method="post" data-confirm="Jalankan penandaan overdue sekarang?">
       <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
       <button class="btn-action danger" style="padding:10px 26px">Run Overdue Mark</button>
     </form>

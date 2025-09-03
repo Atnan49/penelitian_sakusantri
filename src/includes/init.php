@@ -25,8 +25,18 @@ if (!defined('BASE_URL')) {
     } elseif (strpos($sn, '/public/') !== false) {
         $base = substr($sn, 0, strpos($sn, '/public/'));
     } else {
-        // Likely served with DocumentRoot pointing at /public, so base is site root
-        $base = '/';
+        // Jika tidak ada segmen /public/, mungkin DocumentRoot masih parent project
+        // Contoh: akses http://localhost/saku_santri/login -> SCRIPT_NAME (/saku_santri/index.php)
+        // Ambil segmen pertama setelah slash dan gunakan sebagai BASE_URL.
+        $seg = '';
+        $snTrim = ltrim($sn, '/');
+        if ($snTrim !== '') {
+            $parts = explode('/', $snTrim);
+            if (!empty($parts[0]) && $parts[0] !== 'index.php') {
+                $seg = '/' . $parts[0];
+            }
+        }
+        $base = $seg === '' ? '/' : $seg; // fallback root jika gagal deteksi
     }
     $base = rtrim($base, '/');
     define('BASE_URL', ($base === '' ? '/' : $base . '/'));

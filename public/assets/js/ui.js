@@ -74,4 +74,87 @@
     document.documentElement.setAttribute('data-theme-ts', Date.now());
   });
   observer.observe(body,{attributes:true,attributeFilter:['class']});
+
+  // Delegasi konfirmasi untuk elemen dengan data-confirm
+  document.addEventListener('click', function(e){
+    const el = e.target.closest('[data-confirm]');
+    if(!el) return;
+    const msg = el.getAttribute('data-confirm') || 'Lanjutkan tindakan ini?';
+    if(!window.confirm(msg)){
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  });
+
+  // Delegasi navigasi untuk elemen dengan data-href
+  document.addEventListener('click', function(e){
+    const nav = e.target.closest('[data-href]');
+    if(!nav) return;
+    const url = nav.getAttribute('data-href');
+    if(url){ window.location.href = url; }
+  });
+
+  // Tombol kembali generic
+  document.addEventListener('click', function(e){
+    const back = e.target.closest('[data-action="back"]');
+    if(!back) return;
+    e.preventDefault();
+    history.back();
+  });
+
+  // Avatar / image fallback: tandai gambar gagal dan sembunyikan bila pakai .js-img-hide-on-error
+  document.addEventListener('error', function(e){
+    const img = e.target;
+    if(!(img instanceof HTMLImageElement)) return;
+    if(img.classList.contains('js-hide-on-error')){
+      const wrap = img.closest('.avatar-sm, .pb-avatar, .admin-avatar');
+      if(wrap){ wrap.classList.add('no-img'); }
+      img.remove();
+    }
+  }, true); // use capture agar menangkap event error image
+
+  // Clear NISN search (kasir) tanpa inline JS
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('.js-clear-nisn');
+    if(!btn) return;
+    const form = btn.closest('form');
+    if(!form) return;
+    const inp = form.querySelector('[name=nisn]');
+    if(inp){ inp.value=''; }
+    form.submit();
+  });
+
+  // Buat_tagihan script load fallback detection (ganti inline onerror)
+  const tagihanMarker = document.querySelector('[data-require-script="buat_tagihan"]');
+  if(tagihanMarker){
+    const script = document.querySelector('script[src$="buat_tagihan.js"]');
+    if(script){
+      script.addEventListener('error', ()=>{
+        const msg = document.getElementById('jsErrorMsg');
+        if(msg){ msg.style.display='block'; }
+      });
+    }
+  }
+
+  // Generic tab switching (replaces removed inline scripts; works with buttons .tab-btn[data-tab])
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('.tab-btn');
+    if(!btn) return;
+    const tabKey = btn.getAttribute('data-tab');
+    if(!tabKey) return;
+  // Debug marker (can be removed later)
+  if(window.console){ console.debug('[ui.js] Switch tab ->', tabKey); }
+    // Limit scope to same tab group if multiple groups exist
+    const wrap = btn.closest('.tabs-wrap');
+    const btns = wrap ? wrap.querySelectorAll('.tab-btn') : document.querySelectorAll('.tab-btn');
+    btns.forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    // Show/hide contents (#tab-<key>)
+    const panels = document.querySelectorAll('.tab-content');
+    panels.forEach(p=>{
+      const match = p.id === 'tab-'+tabKey;
+      if(match){ p.classList.add('active'); }
+      else { p.classList.remove('active'); }
+    });
+  });
 })();

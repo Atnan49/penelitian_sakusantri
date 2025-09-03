@@ -10,7 +10,7 @@ require_once __DIR__ . "/../src/includes/header.php";
   <!-- Brand Header (Desktop) -->
   <div class="brand-header">
     <div class="brand-logo">
-      <img src="<?php echo url('assets/img/logo.png'); ?>" alt="SakuSantri" class="logo-icon" onerror="this.style.display='none';">
+  <img src="<?php echo url('assets/img/logo.png'); ?>" alt="SakuSantri" class="logo-icon js-hide-on-error">
       <span class="brand-text">SakuSantri</span>
     </div>
   </div>
@@ -18,7 +18,7 @@ require_once __DIR__ . "/../src/includes/header.php";
   <!-- Mobile Header Circle -->
   <div class="mobile-header">
     <div class="mobile-logo">
-      <img src="<?php echo url('assets/img/logo.png'); ?>" alt="SakuSantri" class="logo-mobile" onerror="this.style.display='none';">
+  <img src="<?php echo url('assets/img/logo.png'); ?>" alt="SakuSantri" class="logo-mobile js-hide-on-error">
       <span class="brand-mobile">SakuSantri</span>
     </div>
   </div>
@@ -109,21 +109,5 @@ require_once __DIR__ . "/../src/includes/header.php";
   <div class="circle-decoration circle-left"></div>
   <div class="circle-decoration circle-right"></div>
 </main>
-
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  const pw = document.getElementById('password');
-  const btn = document.querySelector('.password-toggle');
-  if(pw && btn){
-    btn.addEventListener('click', () => {
-      const showing = pw.type === 'text';
-      pw.type = showing ? 'password' : 'text';
-      btn.setAttribute('aria-pressed', String(!showing));
-      btn.setAttribute('aria-label', showing ? 'Tampilkan password' : 'Sembunyikan password');
-      const icon = btn.querySelector('.material-symbols-outlined');
-      if(icon){ icon.textContent = showing ? 'visibility' : 'visibility_off'; }
-    });
-  }
-});
-</script>
+<script src="assets/js/main.js" defer></script>
 <?php require_once __DIR__ . "/../src/includes/footer.php"; ?>

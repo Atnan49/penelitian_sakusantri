@@ -1,5 +1,12 @@
 RewriteEngine On
-RewriteBase /saku_santri/public/
+# NOTE: Struktur Anda saat ini: htdocs/saku_santri/saku_santri/public
+# RewriteBase lama menunjuk ke /saku_santri/public/ (satu level kurang) sehingga bisa memicu 404.
+# Opsi 1 (direkomendasikan): Hapus saja RewriteBase (mod_rewrite akan pakai path relatif).
+# Opsi 2: Set ke path yang benar: /saku_santri/saku_santri/public/
+# Di bawah ini saya komentari yang lama dan aktifkan yang baru yang sesuai.
+# Jika project diakses sebagai http://localhost/saku_santri/ dan folder public bukan DocumentRoot,
+# cukup gunakan satu level base berikut. Jika Anda memindahkan DocumentRoot ke folder public, hilangkan RewriteBase.
+RewriteBase /saku_santri/
 
 # --- Pretty URLs within /public ---
 # Login / Logout

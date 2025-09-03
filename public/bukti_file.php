@@ -43,6 +43,7 @@ $candidates = [
   APP_ROOT . '/public/uploads/' . $fn,
   APP_ROOT . '/public/assets/uploads/' . $fn,
   APP_ROOT . '/uploads/' . $fn,
+  APP_ROOT . '/public/uploads/payment_proof/' . $fn,
 ];
 $path = null;
 foreach ($candidates as $p) {

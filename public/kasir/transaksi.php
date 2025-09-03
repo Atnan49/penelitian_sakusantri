@@ -17,7 +17,8 @@ if($nisn !== ''){
   }
 }
 
-// Proses pembelian (debit)
+// Proses pembelian (debit) - fallback non-JS.
+// DILENGKAPI: Post/Redirect/Get + proteksi duplikat agar reload tidak menduplikasi transaksi.
 if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['aksi']??'')==='beli'){
   $token = $_POST['csrf_token'] ?? '';
   if(!verify_csrf_token($token)){
@@ -28,22 +29,41 @@ if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['aksi']??'')==='beli'){
     $catatan = trim($_POST['catatan'] ?? 'Belanja koperasi');
     if($uid<=0 || $nominal<=0){ $err='Data tidak lengkap'; }
     else {
+      // Cegah duplikat sangat cepat (misal F5 setelah POST) memakai signature sederhana tersimpan di session
+      $sig = $uid.'|'.$nominal.'|'.date('YmdHis'); // include detik untuk granularitas
+      $last = $_SESSION['kasir_last_sig']['sig'] ?? null;
+      $lastTs = $_SESSION['kasir_last_sig']['ts'] ?? 0;
+      if($last && $last === $sig && (time()-$lastTs) < 5){
+        // Dianggap duplikat
+        $_SESSION['kasir_flash'] = 'Transaksi duplikat diabaikan.';
+        header('Location: '.url('kasir/transaksi?nisn='.rawurlencode($nisn)));
+        exit;
+      }
       @mysqli_begin_transaction($conn);
       $lock = mysqli_prepare($conn,'SELECT saldo FROM users WHERE id=? FOR UPDATE');
       if($lock){ mysqli_stmt_bind_param($lock,'i',$uid); mysqli_stmt_execute($lock); $rs= mysqli_stmt_get_result($lock); $row=$rs?mysqli_fetch_assoc($rs):null; }
       if(empty($row)){ @mysqli_rollback($conn); $err='Pengguna tidak ditemukan'; }
       elseif((int)$row['saldo'] < $nominal){ @mysqli_rollback($conn); $err='Saldo tidak cukup'; }
       else {
-        $upd = mysqli_prepare($conn,'UPDATE users SET saldo = saldo - ? WHERE id=?');
-        if($upd){ $nF = (float)$nominal; mysqli_stmt_bind_param($upd,'di',$nF,$uid); mysqli_stmt_execute($upd); }
-        $ins = mysqli_prepare($conn,'INSERT INTO wallet_ledger (user_id,direction,amount,ref_type,ref_id,note) VALUES (? ,"debit", ?, "purchase", NULL, ?)');
-        if($ins){ $nF=(float)$nominal; mysqli_stmt_bind_param($ins,'ids',$uid,$nF,$catatan); mysqli_stmt_execute($ins); }
-        add_notification($conn,$uid,'purchase','Belanja koperasi Rp '.number_format($nominal,0,',','.'));
-        @mysqli_commit($conn);
-        $msg='Transaksi diproses';
+  // Pencatatan baru: gunakan ledger_entries agar konsisten dengan halaman wali
+  require_once BASE_PATH.'/src/includes/payments.php';
+  // Ledger: credit WALLET (keluar uang)
+  ledger_post($conn,$uid,'WALLET',0,(float)$nominal,'purchase',null,$catatan);
+  // (Opsional) Simpan jejak tambahan di wallet_ledger lama untuk kompatibilitas
+  $ins = mysqli_prepare($conn,'INSERT INTO wallet_ledger (user_id,direction,amount,ref_type,ref_id,note) VALUES (? ,"debit", ?, "purchase", NULL, ?)');
+  if($ins){ $nF=(float)$nominal; mysqli_stmt_bind_param($ins,'ids',$uid,$nF,$catatan); mysqli_stmt_execute($ins); }
+  // Sinkronisasi saldo cache
+  @mysqli_query($conn,'UPDATE users u SET saldo = (SELECT COALESCE(SUM(debit-credit),0) FROM ledger_entries le WHERE le.user_id='.(int)$uid.' AND le.account="WALLET") WHERE u.id='.(int)$uid.' LIMIT 1');
+  add_notification($conn,$uid,'purchase','Belanja koperasi Rp '.number_format($nominal,0,',','.'));
+  @mysqli_commit($conn);
+  $_SESSION['kasir_last_sig'] = ['sig'=>$sig,'ts'=>time()];
+  $_SESSION['kasir_flash'] = 'Transaksi diproses.';
   // refresh data pengguna (saldo terbaru)
   if($stmt = mysqli_prepare($conn,'SELECT id,nama_wali,nama_santri,nisn,saldo'.$avatarSelect.' FROM users WHERE id=? LIMIT 1')){ mysqli_stmt_bind_param($stmt,'i',$uid); mysqli_stmt_execute($stmt); $r=mysqli_stmt_get_result($stmt); $pengguna=$r?mysqli_fetch_assoc($r):$pengguna; if($pengguna && !$hasAvatar) $pengguna['avatar']=''; }
-        $nisn = $pengguna['nisn'] ?? $nisn; // kalau kolom nisn tidak di select sebelumnya aman di GET
+  $nisn = $pengguna['nisn'] ?? $nisn; // kalau kolom nisn tidak di select sebelumnya aman di GET
+  // Redirect (PRG) supaya reload tidak kirim ulang POST
+  header('Location: '.url('kasir/transaksi?nisn='.rawurlencode($nisn)));
+  exit;
       }
     }
   }
@@ -63,13 +83,13 @@ require_once __DIR__ . '/../../src/includes/header.php';
     <h1>Kasir Koperasi</h1>
     <div class="quick-actions-inline"></div>
   </div>
-  <?php if(!empty($msg)): ?><div class="alert success" role="alert"><?= e($msg) ?></div><?php endif; ?>
+  <?php if(!empty($_SESSION['kasir_flash'])): ?><div class="alert success" role="alert"><?= e($_SESSION['kasir_flash']) ?></div><?php unset($_SESSION['kasir_flash']); endif; ?>
   <?php if(!empty($err)): ?><div class="alert error" role="alert"><?= e($err) ?></div><?php endif; ?>
   <form method="get" class="kasir-search-pill" autocomplete="off">
     <div class="pill">
       <span class="icon" aria-hidden="true">🔍</span>
       <input type="text" name="nisn" value="<?= e($nisn) ?>" placeholder="Masukkan / scan NISN" autofocus />
-      <?php if($nisn!==''): ?><button type="button" class="clear" aria-label="Bersihkan" onclick="this.closest('form').querySelector('[name=nisn]').value=''; this.closest('form').submit();">&times;</button><?php endif; ?>
+  <?php if($nisn!==''): ?><button type="button" class="clear js-clear-nisn" aria-label="Bersihkan">&times;</button><?php endif; ?>
     </div>
     <noscript><button class="btn-action primary">Cari</button></noscript>
   </form>
@@ -85,7 +105,7 @@ require_once __DIR__ . '/../../src/includes/header.php';
         ?>
         <div class="pb-avatar avatar-sm<?= $avUrl===''?' no-img':'' ?>">
           <?php if($avUrl!==''): ?>
-            <img src="<?= e($avUrl) ?>" alt="Avatar <?= e($pengguna['nama_santri']) ?>" loading="lazy" onerror="this.closest('.avatar-sm').classList.add('no-img'); this.remove();" />
+            <img src="<?= e($avUrl) ?>" alt="Avatar <?= e($pengguna['nama_santri']) ?>" loading="lazy" class="js-hide-on-error" />
           <?php endif; ?>
           <?php if($avUrl===''): ?><span class="av-initial" aria-hidden="true"><?= e($initial) ?></span><?php endif; ?>
         </div>
@@ -94,7 +114,7 @@ require_once __DIR__ . '/../../src/includes/header.php';
       </div>
       <div class="pb-saldo"><span class="label">Saldo</span><span class="val">Rp <?= number_format((float)$pengguna['saldo'],0,',','.') ?></span></div>
     </div>
-    <form method="post" class="form-beli compact">
+    <form method="post" class="form-beli compact js-kasir-form" autocomplete="off" data-user="<?= (int)$pengguna['id'] ?>">
       <input type="hidden" name="aksi" value="beli" />
       <input type="hidden" name="user_id" value="<?= (int)$pengguna['id'] ?>" />
       <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>" />
@@ -128,13 +148,38 @@ require_once __DIR__ . '/../../src/includes/header.php';
     </div>
   </div>
 </div>
-<script nonce="<?= htmlspecialchars($GLOBALS['SCRIPT_NONCE'] ?? '',ENT_QUOTES,'UTF-8'); ?>">(function(){
- const hidden=document.getElementById('nominal');
- const disp=document.getElementById('nominalDisplay');
- function digits(s){return (s||'').replace(/[^0-9]/g,'');}
- function fmt(n){ try{return 'Rp '+Number(n).toLocaleString('id-ID');}catch(e){return 'Rp '+n;}}
- function sync(v){ if(hidden) hidden.value=String(v||0); if(disp) disp.value=fmt(v||0);} 
- if(disp){ const on=()=>{const v=parseInt(digits(disp.value)||'0',10); sync(v);}; disp.addEventListener('input',on); disp.addEventListener('blur',on); on(); }
- document.querySelectorAll('.qa-chip').forEach(ch=>ch.addEventListener('click',()=>{const v=parseInt(ch.getAttribute('data-val'),10)||0; sync(v);}));
-})();</script>
+<script src="<?= url('assets/js/kasir_transaksi.js'); ?>?v=20250901a" defer></script>
+<script defer>
+(function(){
+  const form = document.querySelector('.js-kasir-form');
+  if(!form) return;
+  const saldoEl = document.querySelector('.pb-saldo .val');
+  form.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    const fd = new FormData(form);
+    const nominal = parseInt(fd.get('nominal')||'0',10);
+    if(!nominal || nominal<=0){ alert('Nominal belum diisi'); return; }
+    form.querySelector('button[type=submit]').disabled = true;
+    fetch('<?= url('admin/ajax_kasir_beli.php'); ?>', {method:'POST', body:fd, credentials:'same-origin'})
+      .then(r=>r.json()).then(j=>{
+        form.querySelector('button[type=submit]').disabled = false;
+        if(!j.ok){ alert(j.msg||'Gagal'); return; }
+        // Update saldo tampilan
+        if(typeof j.saldo !== 'undefined' && saldoEl){ saldoEl.textContent = 'Rp '+Number(j.saldo).toLocaleString('id-ID'); }
+        // Broadcast ke tab lain (wali dashboard / riwayat) via localStorage event
+        try{
+          localStorage.setItem('wallet_update', JSON.stringify({uid: form.dataset.user, ts: Date.now(), saldo: j.saldo}));
+          // Hapus key agar event bisa dipicu lagi segera (optional)
+          setTimeout(()=>localStorage.removeItem('wallet_update'),150);
+        }catch(e){}
+        // Reset input nominal
+        const hiddenNom = document.getElementById('nominal');
+        const disp = document.getElementById('nominalDisplay');
+        if(hiddenNom) hiddenNom.value=''; if(disp) { disp.value=''; }
+  // Trigger custom event so kasir_transaksi.js can enforce new entry
+  window.dispatchEvent(new Event('kasir:trx:success'));
+      }).catch(e=>{ form.querySelector('button[type=submit]').disabled = false; alert('Terjadi kesalahan jaringan'); });
+  });
+})();
+</script>
 <?php require_once __DIR__ . '/../../src/includes/footer.php'; ?>

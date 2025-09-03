@@ -26,22 +26,44 @@ if (!verify_csrf_token($token)) {
 }
 
 // Ambil user berdasarkan NISN (menggunakan prepared statement)
+// Rate limiting login: Redis (jika tersedia), fallback ke file-based
 $now = time();
-// Simple IP-based throttle (file-based). Production: replace with redis/memcache.
 $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-$ipKey = preg_replace('/[^0-9a-fA-F:\.]/','_', $ip);
-$rateDir = sys_get_temp_dir().DIRECTORY_SEPARATOR.'saku_login_rate';
-if(!is_dir($rateDir)) @mkdir($rateDir,0700,true);
-$ipFile = $rateDir.DIRECTORY_SEPARATOR.$ipKey.'.json';
-$ipData = ['c'=>0,'t'=>$now];
-if(is_file($ipFile)){
-    $raw=@file_get_contents($ipFile); $jd=@json_decode($raw,true); if(is_array($jd) && isset($jd['c'],$jd['t'])) $ipData=$jd;
-    if($now - $ipData['t'] > 600){ $ipData=['c'=>0,'t'=>$now]; }
+$ipKey = 'loginrate:'.preg_replace('/[^0-9a-fA-F:\.]/','_', $ip);
+$rateLimit = 20; // max 20 attempt per 10 menit per IP
+$rateWindow = 600; // 10 menit
+// Cek Redis tersedia dan class/method ada
+// Gunakan Redis jika tersedia, jika tidak fallback ke file
+$useRedis = false;
+$redisObj = null;
+if (class_exists('Redis')) {
+    try {
+        $redisClass = 'Redis';
+        $redisObj = new $redisClass();
+        if (method_exists($redisObj, 'connect') && $redisObj->connect('127.0.0.1', 6379, 1.5)) {
+            $useRedis = true;
+        }
+    } catch (\Throwable $e) { $useRedis = false; $redisObj = null; }
 }
-if($ipData['c'] >= 20){ // hard cap window 10m
-    sleep(2);
-    header('Location: '.url('login?pesan=gagal'));
-    exit();
+if ($useRedis && $redisObj && method_exists($redisObj, 'get') && method_exists($redisObj, 'multi')) {
+    $c = (int)$redisObj->get($ipKey);
+    if ($c >= $rateLimit) { sleep(2); header('Location: '.url('login?pesan=gagal')); exit(); }
+    $pipe = $redisObj->multi(constant(get_class($redisObj).'::PIPELINE'));
+    $pipe->incr($ipKey);
+    $pipe->expire($ipKey, $rateWindow);
+    $pipe->exec();
+} else {
+    $rateDir = sys_get_temp_dir().DIRECTORY_SEPARATOR.'saku_login_rate';
+    if(!is_dir($rateDir)) @mkdir($rateDir,0700,true);
+    $ipFile = $rateDir.DIRECTORY_SEPARATOR.preg_replace('/[^a-zA-Z0-9_]/','_',$ipKey).'.json';
+    $ipData = ['c'=>0,'t'=>$now];
+    if(is_file($ipFile)){
+        $raw=@file_get_contents($ipFile); $jd=@json_decode($raw,true); if(is_array($jd) && isset($jd['c'],$jd['t'])) $ipData=$jd;
+        if($now - $ipData['t'] > $rateWindow){ $ipData=['c'=>0,'t'=>$now]; }
+    }
+    if($ipData['c'] >= $rateLimit){ sleep(2); header('Location: '.url('login?pesan=gagal')); exit(); }
+    $ipData['c']++;
+    @file_put_contents($ipFile,json_encode($ipData));
 }
 if(!isset($_SESSION['login_attempts'])){ $_SESSION['login_attempts']=0; }
 if(!isset($_SESSION['login_first_attempt'])){ $_SESSION['login_first_attempt']=$now; }

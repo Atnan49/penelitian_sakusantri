@@ -11,7 +11,8 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   else if($do==='start_topup'){
   $amt = normalize_amount($_POST['amount'] ?? 0);
     if($amt < 10000) $err='Minimal top-up 10000'; else {
-      $pid = payment_initiate($conn,$uid,null,'manual_transfer',$amt,'','topup start');
+  // Pastikan argumen invoice_id benar-benar null untuk top up wallet
+  $pid = payment_initiate($conn,$uid,null,'manual_transfer',$amt,'','topup start');
       if($pid){ payment_update_status($conn,$pid,'awaiting_proof',$uid,'topup awaiting proof'); $msg='Top-up dibuat (#'.$pid.'). Upload bukti.'; }
       else $err='Gagal membuat top-up';
     }
@@ -118,4 +119,12 @@ require_once BASE_PATH.'/src/includes/header.php';
     </div>
   </div>
 </main>
+<script>
+(function(){
+  const uid = <?php echo (int)$uid; ?>;
+  const headerSaldo = document.querySelector('h2');
+  function updateSaldo(val){ if(headerSaldo){ headerSaldo.innerHTML = 'Saldo Saat Ini: '+ 'Rp '+Number(val||0).toLocaleString('id-ID'); } }
+  window.addEventListener('storage', function(ev){ if(ev.key==='wallet_update' && ev.newValue){ try{ const d=JSON.parse(ev.newValue); if(String(d.uid)===String(uid)){ updateSaldo(d.saldo); } }catch(e){} } });
+})();
+</script>
 <?php require_once BASE_PATH.'/src/includes/footer.php'; ?>

@@ -69,7 +69,7 @@ require_once __DIR__ . '/../../src/includes/header.php';
             <div class="wali-card-value">Rp <?php echo number_format($saldo,0,',','.'); ?></div>
             <div class="wali-card-sub">Tabungan Santri</div>
         </div>
-        <div class="wali-card spp-card" onclick="location.href='<?php echo url('wali/invoice'); ?>'" style="cursor:pointer">
+    <div class="wali-card spp-card" data-href="<?php echo url('wali/invoice'); ?>" style="cursor:pointer">
             <div class="wali-card-head">Tagihan SPP</div>
             <div class="wali-card-value" style="color:#d97706"><?php echo $tagihan_spp; ?></div>
             <div class="wali-card-sub">Belum Dibayar</div>
@@ -166,6 +166,21 @@ require_once __DIR__ . '/../../src/includes/header.php';
         </div>
     </div>
 </div>
+<script>
+// Dengarkan broadcast saldo dari kasir (storage event)
+(function(){
+    const uid = <?php echo (int)$user_id; ?>;
+    function updateSaldo(s){
+        const el = document.querySelector('.wali-card .wali-card-value');
+        if(el){ el.textContent = 'Rp '+Number(s).toLocaleString('id-ID'); }
+    }
+    window.addEventListener('storage', function(ev){
+        if(ev.key==='wallet_update' && ev.newValue){
+            try{ const data = JSON.parse(ev.newValue); if(String(data.uid)===String(uid) && typeof data.saldo!== 'undefined'){ updateSaldo(data.saldo); } }catch(e){}
+        }
+    });
+})();
+</script>
 <?php require_once __DIR__ . '/../../src/includes/footer.php'; ?>
 
 

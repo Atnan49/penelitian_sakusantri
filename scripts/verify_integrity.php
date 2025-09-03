@@ -62,9 +62,20 @@ $q = mysqli_query($conn,"SELECT p.id pid, i.id iid FROM payment p JOIN invoice i
 while($q && $row=mysqli_fetch_assoc($q)){ $issues[]='Invoice #'.$row['iid'].' pending padahal payment settled #'.$row['pid']; }
 
 // Summary counts
-$totalInvoices = mysqli_fetch_row(mysqli_query($conn,'SELECT COUNT(*) FROM invoice'))[0] ?? 0;
-$totalPayments = mysqli_fetch_row(mysqli_query($conn,'SELECT COUNT(*) FROM payment'))[0] ?? 0;
-$totalLedger = mysqli_fetch_row(mysqli_query($conn,'SELECT COUNT(*) FROM ledger_entries'))[0] ?? 0;
+// Summary counts (tahan fatal jika tabel belum ada di instalasi awal)
+function safe_count(mysqli $c, string $sql): int {
+  $rs = @mysqli_query($c,$sql);
+  if(!$rs){ return 0; }
+  $row = mysqli_fetch_row($rs);
+  if(!$row){ return 0; }
+  return (int)$row[0];
+}
+$totalInvoices = safe_count($conn,'SELECT COUNT(*) FROM invoice');
+$totalPayments = safe_count($conn,'SELECT COUNT(*) FROM payment');
+$totalLedger   = safe_count($conn,'SELECT COUNT(*) FROM ledger_entries');
+if($totalInvoices===0 && $totalPayments===0 && $totalLedger===0){
+  $warn[] = 'Semua hitungan 0. Mungkin tabel belum dimigrasi atau prefix berbeda.';
+}
 
 $info[] = 'Total invoice: '.$totalInvoices;
 $info[] = 'Total payment: '.$totalPayments;

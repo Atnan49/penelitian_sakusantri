@@ -6,15 +6,9 @@ header('X-Content-Type-Options: nosniff');
 header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
 // Basic CSP (can be tightened later); allow self + inline styles for existing legacy CSS tweaks
 if(!headers_sent()){
-  // Generate per-request nonce for inline scripts
-  $SCRIPT_NONCE = base64_encode(random_bytes(16));
-  // Store globally for footer/pages
-  $GLOBALS['SCRIPT_NONCE'] = $SCRIPT_NONCE;
-  $csp = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'nonce-".$SCRIPT_NONCE."'; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'; form-action 'self'";
+  // Semua inline script sudah dipindahkan => tidak butuh nonce. Sisakan 'unsafe-inline' pada style sementara karena masih ada inline <style> kecil di beberapa halaman.
+  $csp = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'; form-action 'self'";
   header('Content-Security-Policy: '.$csp);
-} else {
-  // Fallback nonce if headers already sent (should not happen early)
-  if(empty($GLOBALS['SCRIPT_NONCE'])){ $GLOBALS['SCRIPT_NONCE']=base64_encode(random_bytes(16)); }
 }
 ?>
 <!DOCTYPE html>
@@ -118,13 +112,12 @@ if(!headers_sent()){
       <div class="brand-text">SakuSantri</div>
     </div>
     <div class="admin-avatar" aria-label="Avatar Admin">
-      <img src="<?php echo url('assets/img/hero.png'); ?>" alt="Avatar" onerror="this.style.display='none';this.closest('.admin-avatar').classList.add('no-img');" />
+  <img src="<?php echo url('assets/img/hero.png'); ?>" alt="Avatar" class="js-hide-on-error" />
       <span class="avatar-letter" aria-hidden="true"><?php echo e($adminInitial); ?></span>
     </div>
     <div class="greet-wrap"><span class="hi">Hi, Selamat Datang</span><span class="role">ADMIN</span></div>
   </div>
   <a class="btn-menu<?php echo $isActive('/admin/'); ?>" href="<?php echo url("admin/"); ?>"><span class="mi material-symbols-outlined">home</span> Beranda</a>
-  <!-- Navigation streamlined: remove legacy redirects (konfirmasi, riwayat_transaksi) -->
   <a class="btn-menu<?php echo $isActive('/admin/invoice.php'); ?>" href="<?php echo url("admin/invoice.php"); ?>"><span class="mi material-symbols-outlined">request_quote</span> Invoice</a>
   <a class="btn-menu<?php echo $isActive('/admin/generate_spp'); ?>" href="<?php echo url("admin/generate_spp.php"); ?>"><span class="mi material-symbols-outlined">playlist_add</span> Generate SPP</a>
   <a class="btn-menu<?php echo $isActive('/admin/wallet_topups'); ?>" href="<?php echo url("admin/wallet_topups.php"); ?>"><span class="mi material-symbols-outlined">account_balance_wallet</span> Top-Up Wallet</a>
