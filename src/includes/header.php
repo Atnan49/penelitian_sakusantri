@@ -30,20 +30,20 @@ if(!headers_sent()){
     $hostDisplay = preg_replace('/^www\./i', '', $rawHost);
   ?>
   <?php
-    // Dynamic brand assets: place a custom logo at public/assets/img/brand_logo.(png|webp|svg)
+    // Simplified per request: force use of logo.png everywhere (ensure file exists at public/assets/img/logo.png)
     $brandLogoRel = 'assets/img/logo.png';
-    foreach(['brand_logo.png','brand_logo.webp','brand_logo.svg'] as $cand){
-      if(is_file(PUBLIC_PATH.'/assets/img/'.$cand)){ $brandLogoRel = 'assets/img/'.$cand; break; }
-    }
-    $faviconRel = 'assets/img/favicon.png';
-    foreach(['favicon.ico','favicon.png','favicon.svg','brand_logo.png','brand_logo.webp'] as $fav){
-      if(is_file(PUBLIC_PATH.'/assets/img/'.$fav)){ $faviconRel = 'assets/img/'.$fav; break; }
-    }
-    $appTitle = 'Saku Santri';
+    $faviconRel = $brandLogoRel; // same file for tab icon
+    $baseTitle = 'Saku Santri';
+    if(!empty($PAGE_TITLE) && strcasecmp(trim($PAGE_TITLE),$baseTitle)!==0){
+      $fullTitle = trim($PAGE_TITLE).' – '.$baseTitle;
+    } else { $fullTitle = $baseTitle; }
   ?>
-  <title><?= e($appTitle) ?></title>
-  <link rel="icon" href="<?= url($faviconRel) ?>" />
-  <link rel="shortcut icon" href="<?= url($faviconRel) ?>" type="image/x-icon" />
+  <title><?= e($fullTitle) ?></title>
+  <link rel="icon" type="image/png" sizes="32x32" href="<?= url($faviconRel) ?>" />
+  <link rel="icon" type="image/png" sizes="16x16" href="<?= url($faviconRel) ?>" />
+  <link rel="shortcut icon" href="<?= url($faviconRel) ?>" />
+  <link rel="apple-touch-icon" href="<?= url($faviconRel) ?>" />
+  <meta property="og:image" content="<?= url($brandLogoRel) ?>" />
   <link rel="stylesheet" href="<?php echo url("assets/css/style.css"); ?>?v=20250826a">
   <?php if (empty($_SESSION['role'])): ?>
   <link rel="stylesheet" href="<?php echo url('assets/css/auth.css'); ?>?v=20250825g">
