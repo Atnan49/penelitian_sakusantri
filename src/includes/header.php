@@ -33,16 +33,23 @@ if(!headers_sent()){
   // Branding: pakai logo.png untuk semua (brand + favicon) agar konsisten
   $brandLogoRel = 'assets/img/logo.png';
   $faviconRel = $brandLogoRel; // favicon langsung logo
+  $faviconAbs = BASE_PATH.'/public/'.$faviconRel;
+  $icoCandidate = 'favicon.ico'; // optional manual placement by user
+  $favVersion = file_exists($faviconAbs) ? filemtime($faviconAbs) : time();
     $baseTitle = 'Saku Santri';
     if(!empty($PAGE_TITLE) && strcasecmp(trim($PAGE_TITLE),$baseTitle)!==0){
       $fullTitle = trim($PAGE_TITLE).' – '.$baseTitle;
     } else { $fullTitle = $baseTitle; }
   ?>
   <title><?= e($fullTitle) ?></title>
-  <link rel="icon" type="image/png" sizes="32x32" href="<?= url($faviconRel) ?>" />
-  <link rel="icon" type="image/png" sizes="16x16" href="<?= url($faviconRel) ?>" />
-  <link rel="shortcut icon" href="<?= url($faviconRel) ?>" />
-  <link rel="apple-touch-icon" href="<?= url($faviconRel) ?>" />
+  <?php $fv = '?v='.$favVersion; ?>
+  <link rel="icon" type="image/png" sizes="32x32" href="<?= url($faviconRel).$fv ?>" />
+  <link rel="icon" type="image/png" sizes="16x16" href="<?= url($faviconRel).$fv ?>" />
+  <link rel="shortcut icon" href="<?= url($faviconRel).$fv ?>" />
+  <link rel="apple-touch-icon" href="<?= url($faviconRel).$fv ?>" />
+  <?php if(file_exists(BASE_PATH.'/public/'.$icoCandidate)): ?>
+    <link rel="icon" type="image/x-icon" href="<?= url($icoCandidate).$fv ?>" />
+  <?php endif; ?>
   <meta property="og:image" content="<?= url($brandLogoRel) ?>" />
   <link rel="stylesheet" href="<?php echo url("assets/css/style.css"); ?>?v=20250826a">
   <?php if (empty($_SESSION['role'])): ?>
