@@ -29,7 +29,21 @@ if(!headers_sent()){
     // drop leading www.
     $hostDisplay = preg_replace('/^www\./i', '', $rawHost);
   ?>
-  <title>Saku Santri — <?php echo e($hostDisplay); ?></title>
+  <?php
+    // Dynamic brand assets: place a custom logo at public/assets/img/brand_logo.(png|webp|svg)
+    $brandLogoRel = 'assets/img/logo.png';
+    foreach(['brand_logo.png','brand_logo.webp','brand_logo.svg'] as $cand){
+      if(is_file(PUBLIC_PATH.'/assets/img/'.$cand)){ $brandLogoRel = 'assets/img/'.$cand; break; }
+    }
+    $faviconRel = 'assets/img/favicon.png';
+    foreach(['favicon.ico','favicon.png','favicon.svg','brand_logo.png','brand_logo.webp'] as $fav){
+      if(is_file(PUBLIC_PATH.'/assets/img/'.$fav)){ $faviconRel = 'assets/img/'.$fav; break; }
+    }
+    $appTitle = 'Saku Santri';
+  ?>
+  <title><?= e($appTitle) ?></title>
+  <link rel="icon" href="<?= url($faviconRel) ?>" />
+  <link rel="shortcut icon" href="<?= url($faviconRel) ?>" type="image/x-icon" />
   <link rel="stylesheet" href="<?php echo url("assets/css/style.css"); ?>?v=20250826a">
   <?php if (empty($_SESSION['role'])): ?>
   <link rel="stylesheet" href="<?php echo url('assets/css/auth.css'); ?>?v=20250825g">
@@ -114,7 +128,7 @@ if(!headers_sent()){
   ?>
   <div class="nav-brand-block">
     <div class="brand-header">
-      <div class="brand-logo"><img src="<?php echo url('assets/img/logo.png'); ?>" alt="Logo" /></div>
+  <div class="brand-logo"><img src="<?php echo url($brandLogoRel); ?>" alt="Logo" /></div>
       <div class="brand-text">SakuSantri</div>
     </div>
     <div class="admin-avatar" aria-label="Avatar Admin">
@@ -149,7 +163,7 @@ if(!headers_sent()){
 <nav id="mainMenu" class="main-menu wali-menu">
   <div class="wali-brand-block">
     <div class="wali-logo-row">
-      <div class="wali-logo-icon"><img src="<?php echo url('assets/img/logo.png'); ?>" alt="Logo" /></div>
+  <div class="wali-logo-icon"><img src="<?php echo url($brandLogoRel); ?>" alt="Logo" /></div>
       <div class="wali-logo-text">SakuSantri</div>
     </div>
     <div class="wali-avatar"></div>
