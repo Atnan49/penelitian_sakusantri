@@ -81,7 +81,8 @@ require_once __DIR__ . '/../../src/includes/header.php';
   </form>
   <div class="panel">
     <div class="table-wrap">
-      <table class="table mini-table wallet-topup-table" aria-describedby="topupCaption" style="min-width:880px">
+      <!-- Removed fixed min-width to avoid horizontal clipping; let table be responsive -->
+      <table class="table mini-table wallet-topup-table" aria-describedby="topupCaption">
         <caption id="topupCaption" style="position:absolute;left:-9999px;top:-9999px;">Daftar top-up wallet</caption>
         <thead><tr><th>ID</th><th>Wali</th><th>Santri</th><th class="num">Jumlah</th><th>Bukti</th><th>Status</th><th>Dibuat</th><th>Settled</th><th>Aksi</th></tr></thead>
         <tbody>
@@ -93,10 +94,9 @@ require_once __DIR__ . '/../../src/includes/header.php';
             <td class="num">Rp <?= number_format((float)$r['amount'],0,',','.') ?></td>
             <td>
               <?php if($r['proof_file']): 
-                // Gunakan route terproteksi bukti/f/<file>
-                $pf=url('bukti/f/'.rawurlencode($r['proof_file']));
-                $plain='bukti/f/'.rawurlencode($r['proof_file']); ?>
-                <button type="button" class="btn-action small btn-proof" data-img="<?= e($pf) ?>" data-alt="<?= e($plain) ?>" data-fn="<?= e($r['proof_file']) ?>">Lihat</button>
+                // Link langsung buka tab baru ke route terproteksi bukti/f/<file>
+                $pf=url('bukti/f/'.rawurlencode($r['proof_file'])); ?>
+                <a class="btn-action small" href="<?= e($pf) ?>" target="_blank" rel="noopener">Bukti</a>
               <?php else: ?><span class="na">(belum)</span><?php endif; ?>
             </td>
             <td><span class="status-badge <?= e($stClass) ?>"><?= e(str_replace('_',' ',$r['status'])) ?></span></td>
@@ -127,18 +127,4 @@ require_once __DIR__ . '/../../src/includes/header.php';
     </div>
   </div>
 </div>
-<div class="proof-modal" id="proofModal" hidden>
-  <div class="pm-back" data-close></div>
-  <div class="pm-card">
-    <button type="button" class="pm-close" data-close>&times;</button>
-    <div class="pm-toolbar" id="pmToolbar" hidden>
-      <span class="pm-fn" id="pmFn"></span>
-      <div class="pm-actions">
-        <a href="#" target="_blank" rel="noopener" id="pmOpen" class="btn-action small">Buka Tab</a>
-      </div>
-    </div>
-  <img alt="Bukti top-up" id="pmImg" src="" loading="lazy" />
-  </div>
-</div>
 <?php require_once __DIR__ . '/../../src/includes/footer.php'; ?>
-<script src="<?= url('assets/js/wallet_topups.js') ?>" defer></script>

@@ -23,6 +23,28 @@ $recent_invoice_payments = analytics_recent_pending_payments($conn,5,true);
 $recent_wallet_topup = analytics_recent_pending_payments($conn,5,false);
 require_once __DIR__ . "/../../src/includes/header.php";
 ?>
+<?php
+    // Dynamic brand assets & favicon (YouTube-like tab icon behavior)
+    // 1. Primary brand image detection order
+    $brandLogoRel = 'assets/img/logo.png';
+    foreach(['brand_logo.png','brand_logo.webp','brand_logo.svg'] as $cand){
+      if(is_file(PUBLIC_PATH.'/assets/img/'.$cand)){ $brandLogoRel = 'assets/img/'.$cand; break; }
+    }
+    // 2. Favicon detection order; falls back to brand logo
+    $faviconRel = $brandLogoRel; // start with brand
+    foreach(['favicon.ico','favicon.png','favicon.svg','favicon-32.png','favicon-16.png'] as $fav){
+      if(is_file(PUBLIC_PATH.'/assets/img/'.$fav)){ $faviconRel = 'assets/img/'.$fav; break; }
+    }
+    // 3. Page title: allow pages to set $PAGE_TITLE before including header
+    $baseTitle = 'Saku Santri';
+    if(!empty($PAGE_TITLE)){
+      $pageTitle = trim($PAGE_TITLE);
+      if(strcasecmp($pageTitle,$baseTitle)!==0){
+        $fullTitle = $pageTitle.' – '.$baseTitle; // Similar pattern to YouTube's "Video Title - YouTube"
+      } else { $fullTitle = $baseTitle; }
+    } else {
+      $fullTitle = $baseTitle; }
+  ?>
 <div class="page-shell">
   <?php $belum = $invoice_unpaid + $invoice_overdue; ?>
   <div class="content-header">

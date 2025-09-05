@@ -1,4 +1,4 @@
-<?php
+So.<?php
 // wallet_sync.php - helper to reconcile users.saldo with ledger_entries WALLET movements
 if(!function_exists('wallet_recalc_all')){
     /**

@@ -6,6 +6,7 @@ if (!empty($_SESSION["role"])) {
 }
 require_once __DIR__ . "/../src/includes/header.php";
 ?>
+
 <main class="login-container">
   <!-- Brand Header (Desktop) -->
   <div class="brand-header">

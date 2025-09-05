@@ -1702,6 +1702,15 @@ input:focus,select:focus,textarea:focus{outline:var(--focus-outline);outline-off
 .wallet-topups-page td.acts{white-space:nowrap;font-size:11px}
 .wallet-topups-page td.acts form.inline{display:inline}
 .wallet-topups-page td.acts .dash{color:#777}
+/* Fix: prevent table content / status chips or action buttons from being visually clipped
+	inside the panel (panel has overflow:hidden). Allow visible overflow specifically
+	for this page while keeping global overflow behavior elsewhere. */
+.wallet-topups-page .panel{overflow:visible}
+.wallet-topups-page .panel .table-wrap{overflow-x:auto}
+/* Optimize column widths so action buttons tidak terpotong */
+.wallet-topup-table td.num{white-space:nowrap}
+.wallet-topup-table td.acts{white-space:nowrap}
+.wallet-topup-table th:last-child,.wallet-topup-table td.acts{width:140px}
 /* Row background cues */
 .wallet-topup-table tr.pay-status-awaiting-proof td{background:#fffdf5}
 .wallet-topup-table tr.pay-status-awaiting-confirmation td{background:#f8fbff}
