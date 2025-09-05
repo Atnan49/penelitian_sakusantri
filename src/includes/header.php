@@ -30,12 +30,9 @@ if(!headers_sent()){
     $hostDisplay = preg_replace('/^www\./i', '', $rawHost);
   ?>
   <?php
-    // Branding: gunakan logo.png untuk branding sidebar, dan favicon.png (jika ada) khusus tab icon
-    $brandLogoRel = 'assets/img/logo.png';
-    $faviconRel = 'assets/img/favicon.png';
-    if(!file_exists(BASE_PATH.'/public/'.$faviconRel)){
-      $faviconRel = $brandLogoRel; // fallback jika favicon.png belum disediakan
-    }
+  // Branding: pakai logo.png untuk semua (brand + favicon) agar konsisten
+  $brandLogoRel = 'assets/img/logo.png';
+  $faviconRel = $brandLogoRel; // favicon langsung logo
     $baseTitle = 'Saku Santri';
     if(!empty($PAGE_TITLE) && strcasecmp(trim($PAGE_TITLE),$baseTitle)!==0){
       $fullTitle = trim($PAGE_TITLE).' – '.$baseTitle;
