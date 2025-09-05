@@ -30,9 +30,12 @@ if(!headers_sent()){
     $hostDisplay = preg_replace('/^www\./i', '', $rawHost);
   ?>
   <?php
-    // Simplified per request: force use of logo.png everywhere (ensure file exists at public/assets/img/logo.png)
+    // Branding: gunakan logo.png untuk branding sidebar, dan favicon.png (jika ada) khusus tab icon
     $brandLogoRel = 'assets/img/logo.png';
-    $faviconRel = $brandLogoRel; // same file for tab icon
+    $faviconRel = 'assets/img/favicon.png';
+    if(!file_exists(BASE_PATH.'/public/'.$faviconRel)){
+      $faviconRel = $brandLogoRel; // fallback jika favicon.png belum disediakan
+    }
     $baseTitle = 'Saku Santri';
     if(!empty($PAGE_TITLE) && strcasecmp(trim($PAGE_TITLE),$baseTitle)!==0){
       $fullTitle = trim($PAGE_TITLE).' – '.$baseTitle;
@@ -52,7 +55,6 @@ if(!headers_sent()){
     <link rel="stylesheet" href="<?php echo url('assets/css/mobile-app.css'); ?>?v=20250827a" media="(max-width: 860px)">
   <?php endif; ?>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,500,0,0" />
-  <link rel="icon" href="<?php echo url("assets/img/favicon.png"); ?>" />
   <meta name="application-name" content="Saku Santri" />
   <meta name="apple-mobile-web-app-title" content="Saku Santri" />
   <meta name="theme-color" content="#809671" />
