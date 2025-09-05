@@ -83,23 +83,7 @@ require_once __DIR__ . "/../src/includes/header.php";
             <button type="submit" class="btn-masuk">MASUK</button>
           </form>
           
-          <?php
-            $googleReady = (defined('GOOGLE_CLIENT_ID') && defined('GOOGLE_CLIENT_SECRET')
-              && GOOGLE_CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com'
-              && GOOGLE_CLIENT_SECRET !== 'YOUR_GOOGLE_CLIENT_SECRET');
-          ?>
-          <div class="divider">Atau</div>
-          <?php if($googleReady): ?>
-            <a href="<?php echo url('google_oauth.php'); ?>" class="btn-google" style="text-decoration:none;">
-              <span class="google-icon">G</span>
-              <span>Masuk Dengan Google</span>
-            </a>
-          <?php else: ?>
-            <button type="button" class="btn-google" disabled title="Google OAuth belum dikonfigurasi">
-              <span class="google-icon">G</span>
-              <span>Masuk Dengan Google</span>
-            </button>
-          <?php endif; ?>
+          <!-- Google login removed per request -->
         </div>
       </div>
     </div>
