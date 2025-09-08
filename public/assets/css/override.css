@@ -106,6 +106,8 @@ input:focus,select:focus,textarea:focus{outline:var(--focus-outline);outline-off
 .greet-wrap,.wali-greet{display:flex;flex-direction:column;gap:2px;font-size:12px;font-weight:600;color:#111}
 .greet-wrap .role{font-size:11px;letter-spacing:.6px;background:rgba(255,255,255,.45);padding:4px 10px;border-radius:30px;align-self:flex-start}
 .btn-menu{position:relative;border-radius:10px;margin:0 10px;font-size:13px;letter-spacing:.3px}
+/* Wali shell context: slightly smaller default menu text */
+body.wali .main-menu .btn-menu{font-size:12px}
 .btn-menu .notif-badge{position:absolute;right:12px;top:50%;transform:translateY(-50%)}
 a.btn-menu.active{background:rgba(0,0,0,.18)!important;color:#0b0f0a}
 body.menu-open .main-menu{box-shadow:0 6px 22px -8px rgba(0,0,0,.5)}
@@ -118,6 +120,11 @@ body.menu-open .main-menu{box-shadow:0 6px 22px -8px rgba(0,0,0,.5)}
 .main-menu{background:linear-gradient(var(--admin-green) 0 0) padding-box,linear-gradient(to bottom,rgba(0,0,0,.15),rgba(0,0,0,0) 60px) border-box}
 .main-menu.scrolled-top{box-shadow:none}
 .main-menu.scrolled{box-shadow:0 6px 18px -8px rgba(0,0,0,.45) inset}
+
+/* Wali-only: make sidebar text a bit smaller (desktop) */
+.main-menu.wali-menu .btn-menu{font-size:12px}
+.main-menu.wali-menu .btn-menu .mi{font-size:16px}
+.main-menu.wali-menu .menu-title{font-size:11px}
 
 /* Dark mode overrides removed */
 
