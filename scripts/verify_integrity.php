@@ -9,12 +9,13 @@ if(defined('INTEGRITY_KEY') && constant('INTEGRITY_KEY')){
 }
 
 $mode = $_GET['mode'] ?? 'text';
+$canSendHeaders = !headers_sent();
 if($mode === 'json'){
-  header('Content-Type: application/json; charset=utf-8');
+  if($canSendHeaders){ header('Content-Type: application/json; charset=utf-8'); }
 } elseif($mode === 'html') {
-  header('Content-Type: text/html; charset=utf-8');
+  if($canSendHeaders){ header('Content-Type: text/html; charset=utf-8'); }
 } else {
-  header('Content-Type: text/plain; charset=utf-8');
+  if($canSendHeaders){ header('Content-Type: text/plain; charset=utf-8'); }
 }
 
 function report_block($title,$rows){

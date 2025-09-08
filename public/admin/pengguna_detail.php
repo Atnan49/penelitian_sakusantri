@@ -19,6 +19,81 @@ if(!$stmt){ die('DB err'); }
 mysqli_stmt_bind_param($stmt,'i',$id); mysqli_stmt_execute($stmt); $resU = mysqli_stmt_get_result($stmt); $user = $resU?mysqli_fetch_assoc($resU):null;
 if(!$user){ header('Location: '.url('admin/pengguna')); exit; }
 
+// Optional: kolom beasiswa/discount SPP pada tabel users
+$hasDisc=false; $disc=['type'=>null,'value'=>null,'until'=>null];
+if($col = mysqli_query($conn, "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME IN ('spp_discount_type','spp_discount_value','spp_discount_until')")){
+  $found=0; while($row=mysqli_fetch_row($col)){ $found++; }
+  if($found>=2) $hasDisc=true;
+}
+if($hasDisc){
+  if($st = mysqli_prepare($conn, "SELECT spp_discount_type, spp_discount_value, spp_discount_until FROM users WHERE id=? LIMIT 1")){
+    mysqli_stmt_bind_param($st,'i',$id); mysqli_stmt_execute($st); $rs=mysqli_stmt_get_result($st); if($rs && ($r=mysqli_fetch_row($rs))){
+      $disc=['type'=>$r[0]?:null,'value'=>$r[1]!==null?(float)$r[1]:null,'until'=>$r[2]?:null];
+    }
+  }
+}
+
+// Simpan pengaturan beasiswa
+if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['aksi']??'')==='simpan_beasiswa'){
+  $token = $_POST['csrf_token'] ?? '';
+  if(!verify_csrf_token($token)){
+    $pesan_error='Token tidak valid.';
+  } elseif(!$hasDisc){
+    $pesan_error='Fitur beasiswa belum diaktifkan. Jalankan migrasi 008_user_spp_discount.';
+  } else {
+    $tipe = trim(strtolower($_POST['tipe'] ?? ''));
+    $nilai = (float)str_replace([',','.'],'', $_POST['nilai'] ?? '0'); // support formatted
+    // If nilai posted in plain number with dot thousands, above would over-strip decimals; but we only need integer rupiah
+    $nilai = max(0.0, $nilai);
+  $until = trim($_POST['until'] ?? '');
+    // Normalize month input (YYYY-MM) to YYYYMM if provided
+    if($until !== ''){
+      if(preg_match('/^[0-9]{4}-[0-9]{2}$/',$until)){
+        $until = str_replace('-','',$until);
+      }
+    }
+    $until = $until!==''?$until:null;
+    if($tipe!=='' && !in_array($tipe,['percent','nominal'],true)){
+      $pesan_error='Tipe tidak valid.';
+    } else if($tipe==='percent' && ($nilai<0 || $nilai>100)){
+      $pesan_error='Persentase harus 0-100%.';
+    } else if($until!==null && !preg_match('/^[0-9]{6}$/',$until)){
+      $pesan_error='Periode sampai harus format YYYYMM.';
+    } else {
+      // Normalisasi: jika tipe kosong, set null semua
+      if($tipe===''){
+        $q = mysqli_prepare($conn, "UPDATE users SET spp_discount_type=NULL, spp_discount_value=NULL, spp_discount_until=NULL WHERE id=? LIMIT 1");
+        if($q){ mysqli_stmt_bind_param($q,'i',$id); mysqli_stmt_execute($q); if(mysqli_affected_rows($conn)>=0){ $pesan='Pengaturan beasiswa dihapus.'; $disc=['type'=>null,'value'=>null,'until'=>null]; } else { $pesan_error='Gagal menyimpan.'; } }
+      } else {
+        // Simpan
+        $valStore = $tipe==='percent'? min(100.0,$nilai) : $nilai;
+        $q = mysqli_prepare($conn, "UPDATE users SET spp_discount_type=?, spp_discount_value=?, spp_discount_until=? WHERE id=? LIMIT 1");
+        if($q){ mysqli_stmt_bind_param($q,'sdsi',$tipe,$valStore,$until,$id); mysqli_stmt_execute($q); if(mysqli_affected_rows($conn)>=0){ $pesan='Pengaturan beasiswa disimpan.'; $disc=['type'=>$tipe,'value'=>$valStore,'until'=>$until]; } else { $pesan_error='Gagal menyimpan.'; } }
+      }
+    }
+  }
+}
+
+// Cabut beasiswa cepat
+if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['aksi']??'')==='cabut_beasiswa'){
+  $token = $_POST['csrf_token'] ?? '';
+  if(!verify_csrf_token($token)){
+    $pesan_error='Token tidak valid.';
+  } elseif(!$hasDisc){
+    $pesan_error='Fitur beasiswa belum diaktifkan. Jalankan migrasi 008_user_spp_discount.';
+  } else {
+    if($q = mysqli_prepare($conn, "UPDATE users SET spp_discount_type=NULL, spp_discount_value=NULL, spp_discount_until=NULL WHERE id=? LIMIT 1")){
+      mysqli_stmt_bind_param($q,'i',$id); mysqli_stmt_execute($q);
+      if(mysqli_affected_rows($conn)>=0){
+        $pesan='Beasiswa dicabut.';
+        $disc=['type'=>null,'value'=>null,'until'=>null];
+      } else {
+        $pesan_error='Gagal mencabut beasiswa.';
+      }
+    }
+  }
+}
+
 // Hapus tagihan SPP individual (hanya status menunggu_pembayaran) -- akan dipertahankan untuk administrasi, tetapi fitur generate SPP dihapus.
 if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['aksi']??'')==='hapus_tagihan'){
   $token = $_POST['csrf_token'] ?? '';
@@ -135,6 +210,60 @@ require_once __DIR__ . '/../../src/includes/header.php';
   </div>
   <?php if($pesan): ?><div class="alert success" role="alert"><?= e($pesan) ?></div><?php endif; ?>
   <?php if($pesan_error): ?><div class="alert error" role="alert"><?= e($pesan_error) ?></div><?php endif; ?>
+  <div class="panel beasiswa-panel" style="margin:16px 0;padding:12px;border:1px solid #e3e3e3;border-radius:8px;background:#fafafa">
+    <h3 style="margin-top:0;margin-bottom:12px">Beasiswa / Potongan SPP</h3>
+    <?php if(!$hasDisc): ?>
+      <div class="text-muted" style="font-size:13px">Kolom pengaturan belum tersedia. Jalankan migrasi <code>scripts/migrations/008_user_spp_discount.sql</code> untuk mengaktifkan.</div>
+    <?php else: ?>
+      <?php
+        $aktifTxt = '';
+        if($disc['type'] && $disc['value']>0){
+          if($disc['type']==='percent'){ $aktifTxt = (int)$disc['value']."%"; }
+          else { $aktifTxt = 'Rp '.number_format((float)$disc['value'],0,',','.'); }
+          if(!empty($disc['until']) && preg_match('/^[0-9]{6}$/',$disc['until'])){
+            $aktifTxt .= ' s/d '.substr($disc['until'],0,4).'-'.substr($disc['until'],4,2);
+          }
+        }
+      ?>
+      <?php if($aktifTxt): ?><div style="font-size:12px;color:#226622;margin-bottom:8px">Aktif: <strong><?php echo htmlspecialchars($aktifTxt,ENT_QUOTES,'UTF-8'); ?></strong></div><?php endif; ?>
+      <form method="POST" class="form-inline">
+        <input type="hidden" name="aksi" value="simpan_beasiswa" />
+        <input type="hidden" name="id" value="<?php echo (int)$id; ?>" />
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(),ENT_QUOTES,'UTF-8'); ?>" />
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <label for="tipe" style="display:block;font-size:12px;color:#555">Tipe Potongan</label>
+            <select id="tipe" name="tipe">
+              <option value="" <?php echo !$disc['type']?'selected':''; ?>>Tidak ada</option>
+              <option value="percent" <?php echo ($disc['type']==='percent')?'selected':''; ?>>Persen (%)</option>
+              <option value="nominal" <?php echo ($disc['type']==='nominal')?'selected':''; ?>>Nominal (Rp)</option>
+            </select>
+          </div>
+          <div>
+            <label for="nilai" style="display:block;font-size:12px;color:#555">Nilai</label>
+            <input type="number" step="1" min="0" id="nilai" name="nilai" value="<?php echo $disc['value']!==null? (int)$disc['value'] : 0; ?>" />
+          </div>
+          <div>
+            <label for="until" style="display:block;font-size:12px;color:#555">Berlaku s/d Periode</label>
+            <?php $untilMonth = (!empty($disc['until']) && preg_match('/^[0-9]{6}$/',$disc['until'])) ? (substr($disc['until'],0,4).'-'.substr($disc['until'],4,2)) : ''; ?>
+            <input type="month" id="until" name="until" value="<?php echo htmlspecialchars($untilMonth,ENT_QUOTES,'UTF-8'); ?>" />
+          </div>
+          <div>
+            <button type="submit" class="btn">Simpan</button>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#666;margin-top:8px">Potongan otomatis diterapkan pada tagihan SPP yang dibuat setelah pengaturan disimpan. Jika ingin mengubah tagihan yang sudah ada, lakukan penyesuaian manual.</div>
+      </form>
+      <?php if($disc['type']): ?>
+      <form method="POST" style="display:inline" data-confirm="Cabut beasiswa untuk pengguna ini?">
+        <input type="hidden" name="aksi" value="cabut_beasiswa" />
+        <input type="hidden" name="id" value="<?php echo (int)$id; ?>" />
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(),ENT_QUOTES,'UTF-8'); ?>" />
+        <button type="submit" class="btn" style="background:#c0392b;border-color:#c0392b;margin-top:8px">Cabut Beasiswa</button>
+      </form>
+      <?php endif; ?>
+    <?php endif; ?>
+  </div>
   <div class="tabs-wrap user-tabs">
   <button class="tab-btn active" data-tab="spp">Tagihan <?= empty($tagihan)&&!empty($invoice_fallback)?'Invoice':'' ?> SPP</button>
     <button class="tab-btn" data-tab="rekap">Rekap Saldo</button>

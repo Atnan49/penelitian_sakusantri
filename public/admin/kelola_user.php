@@ -54,7 +54,8 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
             $nama_wali=trim((string)($_POST['nama_wali']??''));
             $nama_santri=trim((string)($_POST['nama_santri']??''));
             $nisn_raw=trim((string)($_POST['nisn']??''));
-            $nisn=preg_replace('/[^0-9]/','',$nisn_raw); // normalisasi digit
+            // Biarkan alfanumerik & beberapa simbol sederhana, tolak lainnya
+            $nisn = preg_replace('/[^A-Za-z0-9._-]/','', $nisn_raw);
             $pw=(string)($_POST['password']??'');
             $avatarFile=null;
             // Deteksi kolom avatar kalau ada (agar insert tidak gagal jika belum dimigrasi)
@@ -63,8 +64,8 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
                 $pesan_error='Semua field wajib diisi.';
             } elseif(strlen($pw)<8){
                 $pesan_error='Password minimal 8 karakter.';
-            } elseif(strlen($nisn)<5){
-                $pesan_error='NISN minimal 5 digit.';
+            } elseif(strlen($nisn)<3){
+                $pesan_error='NISN minimal 3 karakter.';
             } else {
                 // pre-check duplikat
                 if($stDup=mysqli_prepare($conn,"SELECT 1 FROM users WHERE nisn=? LIMIT 1")){

@@ -4,6 +4,21 @@
   const menu = document.getElementById('mainMenu');
   // Insert toggle button if sidebar present
   if(menu && body.classList.contains('has-sidebar')){
+    const isMobile = ()=> window.matchMedia && window.matchMedia('(max-width: 1100px)').matches;
+    function applyMobileMenuBase(){
+      if(!isMobile() || !menu) return;
+      const s = menu.style;
+      s.position = 'fixed';
+      s.top = '0';
+      s.left = '0';
+      s.bottom = '0';
+  s.width = '250px';
+  s.maxWidth = '72vw';
+      s.background = getComputedStyle(menu).backgroundColor || '#7b9370';
+      s.zIndex = '1200';
+      s.transition = 'transform .32s ease';
+      s.willChange = 'transform';
+    }
     let toggle = document.querySelector('.nav-toggle');
     if(!toggle){
       toggle = document.createElement('button');
@@ -15,15 +30,46 @@
       const header = document.querySelector('.site-header .header-inner') || document.body;
       header.insertBefore(toggle, header.firstChild);
     }
-    const backdrop = document.createElement('div');
+  const backdrop = document.createElement('div');
     backdrop.className='menu-backdrop';
     document.body.appendChild(backdrop);
-    function closeMenu(){body.classList.remove('menu-open');toggle.setAttribute('aria-expanded','false');}
-    function openMenu(){body.classList.add('menu-open');toggle.setAttribute('aria-expanded','true');}
+  // Ensure initial hidden state on mobile (inline transform wins over CSS)
+  if(isMobile() && menu){ applyMobileMenuBase(); menu.style.transform = 'translateX(-100%)'; }
+    function closeMenu(){
+      body.classList.remove('menu-open');
+      toggle.setAttribute('aria-expanded','false');
+      if(isMobile() && menu){ menu.style.transform = 'translateX(-100%)'; }
+    }
+    function openMenu(){
+      body.classList.add('menu-open');
+      toggle.setAttribute('aria-expanded','true');
+      if(isMobile() && menu){ menu.style.transform = 'translateX(0)'; }
+    }
     toggle.addEventListener('click',()=>{body.classList.contains('menu-open')?closeMenu():openMenu();});
     backdrop.addEventListener('click',closeMenu);
     // Close on esc
     window.addEventListener('keydown',e=>{if(e.key==='Escape'){closeMenu();}});
+    // Reset inline transform when resizing to desktop
+    window.addEventListener('resize', ()=>{
+      if(isMobile()){
+        applyMobileMenuBase();
+        if(!body.classList.contains('menu-open')){ menu.style.transform = 'translateX(-100%)'; }
+      } else if(menu){
+        // Reset inline styles for desktop
+        menu.style.transform = '';
+        menu.style.position = '';
+        menu.style.top = '';
+        menu.style.left = '';
+        menu.style.bottom = '';
+        menu.style.width = '';
+        menu.style.maxWidth = '';
+        menu.style.zIndex = '';
+        menu.style.transition = '';
+        menu.style.willChange = '';
+        body.classList.remove('menu-open');
+        toggle.setAttribute('aria-expanded','false');
+      }
+    });
   }
   // Focus ring only when keyboard navigation
   function handleFirstTab(e){ if(e.key==='Tab'){ document.documentElement.classList.add('user-tab'); window.removeEventListener('keydown',handleFirstTab); window.addEventListener('mousedown',handleMouse);} }
@@ -49,31 +95,7 @@
     });
   }
 
-  // Theme toggle (persist preference in localStorage)
-  const toggle = document.getElementById('themeToggle');
-  const PREF_KEY = 'app_theme_pref_v1';
-  function applyTheme(pref){
-    if(pref==='dark'){ body.classList.add('theme-dark'); }
-    else { body.classList.remove('theme-dark'); }
-  }
-  // Load stored preference or system
-  try{
-    const stored = localStorage.getItem(PREF_KEY);
-    if(stored){ applyTheme(stored); }
-    else if(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches){ applyTheme('dark'); }
-  }catch(e){/* ignore */}
-  if(toggle){
-    toggle.addEventListener('click',()=>{
-      const dark = body.classList.toggle('theme-dark');
-      try{ localStorage.setItem(PREF_KEY, dark ? 'dark' : 'light'); }catch(e){}
-    });
-  }
-  // Keep sticky header background accurate if theme changes
-  const observer = new MutationObserver(()=>{
-    // Force repaint by toggling a data attribute
-    document.documentElement.setAttribute('data-theme-ts', Date.now());
-  });
-  observer.observe(body,{attributes:true,attributeFilter:['class']});
+  // Theme toggle removed; force light mode (no dark auto-detect)
 
   // Delegasi konfirmasi untuk elemen dengan data-confirm
   document.addEventListener('click', function(e){
@@ -156,5 +178,18 @@
       if(match){ p.classList.add('active'); }
       else { p.classList.remove('active'); }
     });
+  });
+
+  // Password visibility toggles (for forms with .pw-toggle adjacent to input)
+  document.addEventListener('click', function(e){
+    const tgl = e.target.closest('.pw-toggle');
+    if(!tgl) return;
+    const wrap = tgl.closest('.field-wrap');
+    const inp = wrap ? wrap.querySelector('input[type="password"], input[type="text"]') : null;
+    if(!inp) return;
+    const isPwd = inp.type === 'password';
+    try{ inp.type = isPwd ? 'text' : 'password'; }catch(_){ /* ignore */ }
+    const icon = tgl.querySelector('.material-symbols-outlined');
+    if(icon){ icon.textContent = isPwd ? 'visibility_off' : 'visibility'; }
   });
 })();

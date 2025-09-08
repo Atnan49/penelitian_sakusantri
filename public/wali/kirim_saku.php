@@ -66,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 require_once __DIR__ . '/../../src/includes/header.php';
 ?>
-<main class="container topup-container" style="max-width:840px;">
+<div class="container topup-container topup-page">
         <h1 class="wali-page-title">Top-Up Wallet</h1>
     <?php if(isset($pesan)) echo "<div class='alert success'>".e($pesan)."</div>"; ?>
     <?php if(isset($pesan_error)) echo "<div class='alert error'>".e($pesan_error)."</div>"; ?>
@@ -122,6 +122,6 @@ require_once __DIR__ . '/../../src/includes/header.php';
             </form>
         </div>
     <?php endif; ?>
-    </main>
+    </div>
     <?php require_once __DIR__ . '/../../src/includes/footer.php'; ?>
     <script src="../assets/js/kirim_saku.js"></script>

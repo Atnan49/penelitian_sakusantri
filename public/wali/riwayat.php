@@ -53,7 +53,7 @@ else $totalPages = max(1,(int)ceil($ledgerTotal/$perPage));
 
 require_once BASE_PATH.'/src/includes/header.php';
 ?>
-<main class="container" style="padding-bottom:60px">
+<div class="history-page" style="padding-bottom:60px">
 	<h1 class="wali-page-title" style="margin:4px 0 18px">Riwayat</h1>
 	<div class="tab-bar" style="display:flex;gap:10px;margin:0 0 18px;flex-wrap:wrap">
 		<?php $mk = function($t,$lbl) use($tab){ $cls = ($t===$tab)?'btn-tab active':'btn-tab'; echo '<a class="'.$cls.'" href="?tab='.$t.'">'.htmlspecialchars($lbl).'</a>'; }; ?>
@@ -105,7 +105,7 @@ require_once BASE_PATH.'/src/includes/header.php';
 		</div>
 	<?php else: ?>
 		<div class="panel">
-			<h2 style="margin:0 0 14px;font-size:18px">Ledger Wallet</h2>
+			<h2 style="margin:0 0 14px;font-size:18px">Riwayat Wallet </h2>
 			<div style="font-size:12px;color:#666;margin:0 0 10px">Halaman <?= $page ?> / <?= $totalPages ?>. Opening balance: Rp <?= number_format($opening,0,',','.') ?>.</div>
 			<div class="table-wrap" style="overflow-x:auto">
 				<table class="table" style="min-width:760px">
@@ -135,7 +135,7 @@ require_once BASE_PATH.'/src/includes/header.php';
 			<span style="padding:6px 8px;color:#555">Halaman <?= $page ?> / <?= $totalPages ?></span>
 		</div>
 	<?php endif; ?>
-</main>
+</div>
 <?php require_once BASE_PATH.'/src/includes/footer.php'; ?>
 
 

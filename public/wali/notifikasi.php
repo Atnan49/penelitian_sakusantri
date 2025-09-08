@@ -34,9 +34,9 @@ $res = mysqli_query($conn,$sql); while($res && $r=mysqli_fetch_assoc($res)){$row
 
 require_once __DIR__.'/../../src/includes/header.php';
 ?>
-<main class="container notif-page">
+<div class="notif-page">
   <h1 class="notif-title">Notifikasi</h1>
-  <form method="post" style="margin:0 0 16px;display:flex;gap:8px;align-items:center">
+  <form method="post" class="notif-actions" style="margin:0 0 16px;display:flex;gap:8px;align-items:center">
     <input type="hidden" name="aksi" value="tandai_semua" />
     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(),ENT_QUOTES,'UTF-8'); ?>" />
     <button type="submit" class="btn-mark-all">Tandai Semua Dibaca</button>
@@ -55,13 +55,13 @@ require_once __DIR__.'/../../src/includes/header.php';
           }
         }
       ?>
-      <div class="notif-item <?php echo $n['read_at']? 'read':'unread'; ?>">
+    <div class="notif-item <?php echo $n['read_at']? 'read':'unread'; ?>">
         <div class="meta"><span class="type"><?php echo htmlspecialchars($n['type']); ?></span> <span class="time"><?php echo date('d M Y H:i',strtotime($n['created_at'])); ?></span></div>
         <div class="message">
           <?php if($link): ?><a href="<?php echo htmlspecialchars($link,ENT_QUOTES,'UTF-8'); ?>" style="text-decoration:none;color:#14599d"><?php echo htmlspecialchars($n['message']); ?></a><?php else: echo htmlspecialchars($n['message']); endif; ?>
         </div>
         <?php if(!$n['read_at']): ?>
-          <form method="post" class="inline">
+      <form method="post" class="inline form-mark-one">
             <input type="hidden" name="aksi" value="tandai" />
             <input type="hidden" name="id" value="<?php echo (int)$n['id']; ?>" />
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(),ENT_QUOTES,'UTF-8'); ?>" />
@@ -73,5 +73,5 @@ require_once __DIR__.'/../../src/includes/header.php';
       </div>
     <?php endforeach; endif; ?>
   </div>
-</main>
+</div>
 <?php require_once __DIR__.'/../../src/includes/footer.php'; ?>

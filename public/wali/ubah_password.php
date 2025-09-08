@@ -53,27 +53,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 require_once __DIR__ . '/../../src/includes/header.php';
 ?>
-<main class="container" style="max-width:720px;">
+<div class="change-pass-page" style="max-width:720px;">
     <h1 class="admin-heading">Ubah Password</h1>
     <?php if (!empty($msg)) echo '<div class="info">' . e($msg) . '</div>'; ?>
     <?php if (!empty($err)) echo '<div class="error">' . e($err) . '</div>'; ?>
-    <div class="panel" style="margin-top:20px;">
-        <form method="post" class="stack gap-3">
+    <div class="panel pass-panel" style="margin-top:20px;">
+        <form method="post" class="stack gap-3 pass-form">
             <input type="hidden" name="csrf_token" value="<?php echo e(csrf_token()); ?>" />
-            <div class="input-group">
+            <div class="input-group has-toggle">
                 <label>Password Lama</label>
-                <input type="password" name="old_password" required />
+                <div class="field-wrap"><input type="password" name="old_password" required /><button type="button" class="pw-toggle" aria-label="Tampilkan/Sembunyikan"><span class="material-symbols-outlined">visibility</span></button></div>
             </div>
-            <div class="input-group">
+            <div class="input-group has-toggle">
                 <label>Password Baru</label>
-                <input type="password" name="new_password" minlength="8" required />
+                <div class="field-wrap"><input type="password" name="new_password" minlength="8" required /><button type="button" class="pw-toggle" aria-label="Tampilkan/Sembunyikan"><span class="material-symbols-outlined">visibility</span></button></div>
             </div>
-            <div class="input-group">
+            <div class="input-group has-toggle">
                 <label>Konfirmasi Password Baru</label>
-                <input type="password" name="confirm_password" minlength="8" required />
+                <div class="field-wrap"><input type="password" name="confirm_password" minlength="8" required /><button type="button" class="pw-toggle" aria-label="Tampilkan/Sembunyikan"><span class="material-symbols-outlined">visibility</span></button></div>
             </div>
             <button type="submit" class="btn-pill" style="height:42px;">Simpan</button>
         </form>
     </div>
-</main>
+</div>
 <?php require_once __DIR__ . '/../../src/includes/footer.php'; ?>

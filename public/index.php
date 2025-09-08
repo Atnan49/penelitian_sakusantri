@@ -8,10 +8,37 @@ require_once __DIR__ . "/../src/includes/header.php";
 ?>
 
 <main class="login-container">
+  <?php
+    // Optional blurred HIMATIF background
+    $bgCandidates = [
+      'assets/img/HIMATIF(1).png',
+      'assets/img/HIMATIF1 (1).png',
+      'assets/img/HIMATIF.png',
+      'assets/img/himatif.png'
+    ];
+    $himatifBgRel = null; $bgv='';
+    foreach($bgCandidates as $rel){ $abs = BASE_PATH.'/public/'.$rel; if(file_exists($abs)){ $himatifBgRel = $rel; $bgv='?v='.filemtime($abs); break; } }
+    if($himatifBgRel): ?>
+      <div class="bg-himatif-blur" style="background-image:url('<?php echo e(url($himatifBgRel).$bgv); ?>')"></div>
+  <?php endif; ?>
   <!-- Brand Header (Desktop) -->
   <div class="brand-header">
     <div class="brand-logo">
-  <img src="<?php echo url('assets/img/logo.png'); ?>" alt="SakuSantri" class="logo-icon js-hide-on-error">
+      <?php
+        // Optional: show HIMATIF partner logo if present
+        $himatifCandidates = [
+          'assets/img/HIMATIF(1).png',
+          'assets/img/HIMATIF1 (1).png',
+          'assets/img/HIMATIF.png',
+          'assets/img/himatif.png'
+        ];
+        $himatifRel = null; $hv='';
+        foreach($himatifCandidates as $rel){ $abs = BASE_PATH.'/public/'.$rel; if(file_exists($abs)){ $himatifRel = $rel; $hv='?v='.filemtime($abs); break; } }
+      ?>
+      <img src="<?php echo url('assets/img/logo.png'); ?>" alt="SakuSantri" class="logo-icon js-hide-on-error">
+      <?php if($himatifRel): ?>
+        <img src="<?php echo url($himatifRel).$hv; ?>" alt="HIMATIF" title="HIMATIF" class="partner-icon js-hide-on-error" width="38" height="38" />
+      <?php endif; ?>
       <span class="brand-text">SakuSantri</span>
     </div>
   </div>
@@ -19,7 +46,12 @@ require_once __DIR__ . "/../src/includes/header.php";
   <!-- Mobile Header Circle -->
   <div class="mobile-header">
     <div class="mobile-logo">
-  <img src="<?php echo url('assets/img/logo.png'); ?>" alt="SakuSantri" class="logo-mobile js-hide-on-error">
+      <div class="mobile-logo-row">
+        <img src="<?php echo url('assets/img/logo.png'); ?>" alt="SakuSantri" class="logo-mobile js-hide-on-error">
+        <?php if(isset($himatifRel) && $himatifRel): ?>
+          <img src="<?php echo url($himatifRel).$hv; ?>" alt="HIMATIF" title="HIMATIF" class="partner-mobile js-hide-on-error" width="48" height="48" />
+        <?php endif; ?>
+      </div>
       <span class="brand-mobile">SakuSantri</span>
     </div>
   </div>
@@ -37,13 +69,13 @@ require_once __DIR__ . "/../src/includes/header.php";
     <!-- Right Side (Login Card) -->
     <div class="login-right">
       <!-- LOGIN Badge (Mobile) -->
-      <div class="login-badge">LOGIN</div>
+  <div class="login-badge">MASUK</div>
       
       <!-- Login Card -->
       <div class="login-card">
         <!-- LOGIN Cap (Desktop) -->
         <div class="login-cap">
-          <span>LOGIN</span>
+          <span>MASUK</span>
         </div>
         
         <!-- Login Form Panel -->
@@ -65,7 +97,7 @@ require_once __DIR__ . "/../src/includes/header.php";
                 NISN
               </label>
               <span class="material-symbols-outlined form-icon" aria-hidden="true">mail</span>
-              <input type="text" id="nisn" name="nisn" required autocomplete="username" inputmode="numeric" pattern="[0-9]{5,}" title="Masukkan NISN (minimal 5 digit angka)">
+              <input type="text" id="nisn" name="nisn" required autocomplete="username" minlength="3" maxlength="30" pattern="[A-Za-z0-9._-]{3,}" title="ID minimal 3 karakter (huruf/angka/titik/garis/underscore)">
             </div>
             <div class="form-field icon-holder">
               <label for="password">Password</label>

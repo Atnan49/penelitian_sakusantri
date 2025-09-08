@@ -50,7 +50,7 @@ require_once __DIR__ . "/../../src/includes/header.php";
   <div class="content-header">
     <h1>BERANDA ADMIN</h1>
     <div class="quick-actions-inline" aria-label="Tindakan cepat">
-      <a class="qa-btn" href="<?php echo url('admin/invoice.php'); ?>">Kelola Invoice</a>
+      <a class="qa-btn" href="<?php echo url('admin/invoice.php'); ?>">Kelola Tagihan</a>
   <!-- Link Generate SPP dihapus -->
       <a class="qa-btn" href="<?php echo url('admin/pengguna.php'); ?>">Data Santri</a>
     </div>
@@ -69,12 +69,12 @@ require_once __DIR__ . "/../../src/includes/header.php";
   </div>
   <div class="mini-stats" aria-label="Statistik detail">
     <div class="mini-stat" title="Jumlah Wali Terdaftar"><span class="lbl">Wali</span><span class="val"><?php echo number_format($total_wali); ?></span></div>
-    <div class="mini-stat" title="Invoice Lunas"><span class="lbl">Lunas</span><span class="val ok"><?php echo number_format($invoice_paid); ?></span></div>
-    <div class="mini-stat" title="Invoice Belum Dibayar"><span class="lbl">Belum</span><span class="val warn"><?php echo number_format($invoice_unpaid); ?></span></div>
-    <div class="mini-stat" title="Invoice Overdue"><span class="lbl">Overdue</span><span class="val bad"><?php echo number_format($invoice_overdue); ?></span></div>
-  <div class="mini-stat" title="Payment Invoice Pending"><span class="lbl">Pay Inv</span><span class="val info"><?php echo number_format($pending_invoice); ?></span></div>
-  <div class="mini-stat" title="Top-Up Pending"><span class="lbl">Top-Up</span><span class="val info"><?php echo number_format($pending_topup); ?></span></div>
-  <div class="mini-stat" title="Total Pending (invoice + top-up)"><span class="lbl">Total Pend</span><span class="val info"><?php echo number_format($pending_total); ?></span></div>
+    <div class="mini-stat" title="Tagihan Lunas"><span class="lbl">Lunas</span><span class="val ok"><?php echo number_format($invoice_paid); ?></span></div>
+    <div class="mini-stat" title="Tagihan Belum Dibayar"><span class="lbl">Belum</span><span class="val warn"><?php echo number_format($invoice_unpaid); ?></span></div>
+    <div class="mini-stat" title="Tagihan Terlambat"><span class="lbl">Terlambat</span><span class="val bad"><?php echo number_format($invoice_overdue); ?></span></div>
+  <div class="mini-stat" title="Pembayaran Tagihan Menunggu"><span class="lbl">Tagihan</span><span class="val info"><?php echo number_format($pending_invoice); ?></span></div>
+  <div class="mini-stat" title="Top-Up Menunggu"><span class="lbl">Top-Up</span><span class="val info"><?php echo number_format($pending_topup); ?></span></div>
+  <div class="mini-stat" title="Total Menunggu (tagihan + top-up)"><span class="lbl">Total</span><span class="val info"><?php echo number_format($pending_total); ?></span></div>
   </div>
   <div class="section-line-title"><span>Konfirmasi Pembayaran<?php if($pending_total>0) echo ' ('.$pending_total.' menunggu)'; ?></span></div>
   <div class="confirm-wrapper">

@@ -69,6 +69,49 @@ if(!function_exists('invoice_generate_spp_bulk')){
    * Generate SPP invoices for all wali_santri that don't yet have this period.
    * @return array [created => int, skipped => int]
    */
+  // Helper: detect and fetch per-user SPP discount settings (scholarship)
+  function _user_spp_discount(mysqli $conn, int $userId): ?array {
+    static $discChecked=null, $hasCols=false;
+    if($discChecked===null){
+      $discChecked=true;
+      $c1=@mysqli_query($conn, "SHOW COLUMNS FROM users LIKE 'spp_discount_type'");
+      $c2=@mysqli_query($conn, "SHOW COLUMNS FROM users LIKE 'spp_discount_value'");
+      // until column optional
+      $hasCols = ($c1 && mysqli_num_rows($c1)>0) && ($c2 && mysqli_num_rows($c2)>0);
+    }
+    if(!$hasCols) return null;
+    $stmt = mysqli_prepare($conn,'SELECT spp_discount_type, spp_discount_value, IFNULL(spp_discount_until, "") FROM users WHERE id=? LIMIT 1');
+    if(!$stmt) return null;
+    mysqli_stmt_bind_param($stmt,'i',$userId); mysqli_stmt_execute($stmt); $rs=mysqli_stmt_get_result($stmt); $row=$rs?mysqli_fetch_row($rs):null; if(!$row) return null;
+    $type = $row[0] ? strtolower((string)$row[0]) : '';
+    $val = (float)$row[1];
+    $until = $row[2]!==null ? trim((string)$row[2]) : '';
+    if(!$type || $val<=0) return null;
+    return ['type'=>$type,'value'=>$val,'until'=>$until?:null];
+  }
+
+  function _apply_spp_discount_for_period(mysqli $conn, int $userId, string $period, float $baseAmount, ?string &$note): float {
+    $note = '';
+    $disc = _user_spp_discount($conn,$userId);
+    if(!$disc) return $baseAmount;
+    // Check validity by period (YYYYMM)
+    if(!preg_match('/^[0-9]{6}$/',$period)) return $baseAmount;
+    if(!empty($disc['until']) && preg_match('/^[0-9]{6}$/',$disc['until'])){
+      if(strcmp($period,$disc['until'])>0){ return $baseAmount; }
+    }
+    $new = $baseAmount;
+    if($disc['type']==='percent'){
+      $p = max(0.0, min(100.0, (float)$disc['value']));
+      $new = round($baseAmount * (1.0 - $p/100.0));
+      $note = '(beasiswa '.$p.'%)';
+    } else {
+      $cut = max(0.0,(float)$disc['value']);
+      $new = max(0.0, $baseAmount - $cut);
+      $note = '(beasiswa Rp '.number_format($cut,0,',','.').')';
+    }
+    return $new;
+  }
+
   function invoice_generate_spp_bulk(mysqli $conn, string $period, float $amount, ?string $dueDate=null): array {
     $created=0; $skipped=0; $dueDate = $dueDate ?: date('Y-m-d', strtotime(substr($period,0,4).'-'.substr($period,4,2).'-10'));
     $res = mysqli_query($conn, "SELECT id FROM users WHERE role='wali_santri'");
@@ -76,7 +119,9 @@ if(!function_exists('invoice_generate_spp_bulk')){
       $id = (int)$u['id'];
       $chk = mysqli_prepare($conn,'SELECT id FROM invoice WHERE user_id=? AND type="spp" AND period=? LIMIT 1');
       if($chk){ mysqli_stmt_bind_param($chk,'is',$id,$period); mysqli_stmt_execute($chk); $r=mysqli_stmt_get_result($chk); if($r && mysqli_fetch_row($r)){ $skipped++; continue; } }
-      $iid = invoice_create($conn,$id,'spp',$period,$amount,$dueDate,'Tagihan SPP '.$period);
+      $noteExtra=''; $finalAmt = _apply_spp_discount_for_period($conn,$id,$period,$amount,$noteExtra);
+      $notes = 'Tagihan SPP '.$period.($noteExtra?(' '.$noteExtra):'');
+      $iid = invoice_create($conn,$id,'spp',$period,$finalAmt,$dueDate,$notes);
       if($iid){ $created++; }
       else { $skipped++; }
     }
@@ -102,6 +147,58 @@ if(!function_exists('invoice_generate_daftar_ulang_bulk')){
       if($iid){ $created++; } else { $skipped++; }
     }
     return ['created'=>$created,'skipped'=>$skipped];
+  }
+}
+
+// === Single-user invoice generation helpers ===
+if(!function_exists('invoice_generate_spp_single')){
+  /**
+   * Create one SPP invoice for a specific user if not already exists for the period.
+   * @return array{created:int,skipped:int,invoice_id:?int}
+   */
+  function invoice_generate_spp_single(mysqli $conn, int $userId, string $period, float $amount, ?string $dueDate=null): array {
+    if(!preg_match('/^[0-9]{6}$/',$period)) return ['created'=>0,'skipped'=>0,'invoice_id'=>null];
+    $due = $dueDate ?: date('Y-m-d', strtotime(substr($period,0,4).'-'.substr($period,4,2).'-10'));
+    // Skip if already exists
+    $chk = mysqli_prepare($conn,'SELECT id FROM invoice WHERE user_id=? AND type="spp" AND period=? LIMIT 1');
+    if($chk){ mysqli_stmt_bind_param($chk,'is',$userId,$period); mysqli_stmt_execute($chk); $r=mysqli_stmt_get_result($chk); if($r && mysqli_fetch_row($r)) return ['created'=>0,'skipped'=>1,'invoice_id'=>null]; }
+  $noteExtra=''; $finalAmt=_apply_spp_discount_for_period($conn,$userId,$period,$amount,$noteExtra);
+  $notes='Tagihan SPP '.$period.($noteExtra?(' '.$noteExtra):'');
+  $iid = invoice_create($conn,$userId,'spp',$period,$finalAmt,$due,$notes);
+    return ['created'=>$iid?1:0,'skipped'=>$iid?0:1,'invoice_id'=>$iid];
+  }
+}
+
+if(!function_exists('invoice_generate_daftar_ulang_single')){
+  /**
+   * Create one Daftar Ulang invoice for a specific user if not already exists for the period.
+   * @return array{created:int,skipped:int,invoice_id:?int}
+   */
+  function invoice_generate_daftar_ulang_single(mysqli $conn, int $userId, string $period, float $amount, ?string $dueDate=null): array {
+    if(!preg_match('/^[0-9]{6}$/',$period)) return ['created'=>0,'skipped'=>0,'invoice_id'=>null];
+    $year = substr($period,0,4); $month = substr($period,4,2);
+    $due = $dueDate ?: ($year.'-'.$month.'-15');
+    $chk = mysqli_prepare($conn,'SELECT id FROM invoice WHERE user_id=? AND type="daftar_ulang" AND period=? LIMIT 1');
+    if($chk){ mysqli_stmt_bind_param($chk,'is',$userId,$period); mysqli_stmt_execute($chk); $r=mysqli_stmt_get_result($chk); if($r && mysqli_fetch_row($r)) return ['created'=>0,'skipped'=>1,'invoice_id'=>null]; }
+    $iid = invoice_create($conn,$userId,'daftar_ulang',$period,$amount,$due,'Tagihan Daftar Ulang '.$period);
+    return ['created'=>$iid?1:0,'skipped'=>$iid?0:1,'invoice_id'=>$iid];
+  }
+}
+
+// Single-user: Beasiswa
+if(!function_exists('invoice_generate_beasiswa_single')){
+  /**
+   * Create one Beasiswa invoice for a specific user if not already exists for the period (YYYYMM).
+   * @return array{created:int,skipped:int,invoice_id:?int}
+   */
+  function invoice_generate_beasiswa_single(mysqli $conn, int $userId, string $period, float $amount, ?string $dueDate=null): array {
+    if(!preg_match('/^[0-9]{6}$/',$period)) return ['created'=>0,'skipped'=>0,'invoice_id'=>null];
+    $year = substr($period,0,4); $month = substr($period,4,2);
+    $due = $dueDate ?: date('Y-m-d', strtotime($year.'-'.$month.'-10'));
+    $chk = mysqli_prepare($conn,'SELECT id FROM invoice WHERE user_id=? AND type="beasiswa" AND period=? LIMIT 1');
+    if($chk){ mysqli_stmt_bind_param($chk,'is',$userId,$period); mysqli_stmt_execute($chk); $r=mysqli_stmt_get_result($chk); if($r && mysqli_fetch_row($r)) return ['created'=>0,'skipped'=>1,'invoice_id'=>null]; }
+    $iid = invoice_create($conn,$userId,'beasiswa',$period,$amount,$due,'Beasiswa '.$period);
+    return ['created'=>$iid?1:0,'skipped'=>$iid?0:1,'invoice_id'=>$iid];
   }
 }
 

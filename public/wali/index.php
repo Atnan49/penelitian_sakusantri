@@ -76,9 +76,9 @@ require_once __DIR__ . '/../../src/includes/header.php';
         </div>
     </div>
     <div class="wali-section-bar">
-        <span>Top-Up Wallet Terbaru</span>
+    <span>Top-Up Dompet Terbaru</span>
         <span class="line"></span>
-        <a class="btn-action primary" href="<?php echo url('wali/kirim_saku.php'); ?>">Top-Up Wallet</a>
+    <a class="btn-action primary" href="<?php echo url('wali/kirim_saku.php'); ?>">Isi Saldo</a>
         <a class="btn-action" href="<?php echo url('wali/invoice.php'); ?>">Lihat Tagihan</a>
     </div>
     <?php
@@ -135,7 +135,7 @@ require_once __DIR__ . '/../../src/includes/header.php';
         </div>
     </div>
     <div class="wali-section-bar">
-        <span>Invoice Terbaru</span>
+    <span>Tagihan Terbaru</span>
         <span class="line"></span>
         <span class="wali-section-sub">(10 terakhir)</span>
     </div>
@@ -155,7 +155,7 @@ require_once __DIR__ . '/../../src/includes/header.php';
                                         <span class="qi-amount">Periode <?php echo e($it['period']); ?> • Rp <?php echo number_format($it['amount'],0,',','.'); ?></span>
                                     </div>
                                     <div class="queue-right">
-                                        <span class="<?php echo status_class($status); ?>"><?php echo e(topup_label($status)); ?></span>
+                                        <span class="<?php echo status_class($status); ?>"><?php echo e(t_status_invoice($status)); ?></span>
                                     </div>
                                 </div>
                             <?php endforeach; ?>

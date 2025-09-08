@@ -77,14 +77,15 @@ $totalAll = array_sum($distCounts) ?: 1;
 $typeCounts=['spp'=>0,'daftar_ulang'=>0];
 $resType = mysqli_query($conn,"SELECT type, COUNT(*) c FROM invoice GROUP BY type");
 while($resType && ($tr=mysqli_fetch_assoc($resType))){ if(isset($typeCounts[$tr['type']])) $typeCounts[$tr['type']] = (int)$tr['c']; }
+require_once BASE_PATH.'/src/includes/status_helpers.php';
 require_once BASE_PATH.'/src/includes/header.php';
 ?>
 <div class="page-shell invoice-page">
   <div class="content-header">
-  <h1>Invoice</h1>
+  <h1>Tagihan</h1>
   <div class="quick-actions-inline">
-      <a class="qa-btn" href="invoice_overdue_run.php" title="Tandai Overdue">Run Overdue</a>
-  <a class="qa-btn" href="generate_spp.php" title="Halaman Generate Tagihan">Generate Tagihan</a>
+    <a class="qa-btn" href="invoice_overdue_run.php" title="Tandai Terlambat">Tandai Terlambat</a>
+  <a class="qa-btn" href="generate_spp.php" title="Buat Tagihan">Buat Tagihan</a>
     </div>
   </div>
   <?php if($msg): ?><div class="alert success" role="alert"><?= e($msg) ?></div><?php endif; ?>
@@ -93,17 +94,17 @@ require_once BASE_PATH.'/src/includes/header.php';
 
   <div class="inv-chips" aria-label="Ringkasan status periode">
     <div class="inv-chip warn" title="Belum Dibayar (Pending + Partial)"><span class="k">Belum</span><span class="v"><?= number_format($distCounts['pending'] + $distCounts['partial']); ?></span></div>
-    <div class="inv-chip danger" title="Overdue"><span class="k">Overdue</span><span class="v"><?= number_format($distCounts['overdue']); ?></span></div>
+  <div class="inv-chip danger" title="Terlambat"><span class="k">Terlambat</span><span class="v"><?= number_format($distCounts['overdue']); ?></span></div>
     <div class="inv-chip ok" title="Lunas"><span class="k">Lunas</span><span class="v"><?= number_format($distCounts['paid']); ?></span></div>
     <div class="inv-chip mute" title="Batal"><span class="k">Batal</span><span class="v"><?= number_format($distCounts['canceled']); ?></span></div>
-    <div class="inv-chip info" title="Outstanding"><span class="k">Outstanding</span><span class="v">Rp <?= number_format($outstandingTotal,0,',','.'); ?></span></div>
+  <div class="inv-chip info" title="Tunggakan"><span class="k">Tunggakan</span><span class="v">Rp <?= number_format($outstandingTotal,0,',','.'); ?></span></div>
     <!-- Tombol Generate SPP dihapus -->
   </div>
 
   <!-- Modal generate SPP dihapus -->
 
   <div class="panel section invoice-list">
-    <div class="panel-header"><h2>Daftar Invoice</h2></div>
+  <div class="panel-header"><h2>Daftar Tagihan</h2></div>
     <?php 
       $fYear = substr($period,0,4); $fMonth = substr($period,4,2); 
       // Ambil distinct tahun dari invoice agar dropdown ringkas
@@ -146,13 +147,13 @@ require_once BASE_PATH.'/src/includes/header.php';
         <select id="fStatus" name="status">
           <option value="">Semua</option>
           <?php foreach(['pending','partial','paid','overdue','canceled'] as $st): ?>
-            <option value="<?= $st ?>" <?php if($filter_status===$st) echo 'selected'; ?>><?= ucfirst($st) ?></option>
+            <option value="<?= $st ?>" <?php if($filter_status===$st) echo 'selected'; ?>><?= e(t_status_invoice($st)) ?></option>
           <?php endforeach; ?>
         </select>
       </div>
       <div class="grp actions">
-        <button class="btn-action outline">Filter</button>
-        <a href="?type=<?= urlencode($filter_type) ?>" class="btn-action" title="Reset">Reset</a>
+  <button class="btn-action outline">Saring</button>
+  <a href="?type=<?= urlencode($filter_type) ?>" class="btn-action" title="Reset">Atur Ulang</a>
       </div>
     </form>
     <div class="table-wrap">
@@ -185,7 +186,7 @@ require_once BASE_PATH.'/src/includes/header.php';
             <td><?= e($inv['period']) ?></td>
             <td class="num">Rp <?= number_format($amt,0,',','.') ?></td>
             <td class="num">Rp <?= number_format($paid,0,',','.') ?><?php if($paid>0 && $paid<$amt) echo ' <span class="pct">('.$pct.'%)</span>'; ?></td>
-            <td><span class="status-<?= e(str_replace('_','-',$inv['status'])) ?>"><?= e(ucfirst($inv['status'])) ?></span></td>
+            <td><span class="status-<?= e(str_replace('_','-',$inv['status'])) ?>"><?= e(t_status_invoice($inv['status'])) ?></span></td>
             <td><?= $inv['due_date'] ?></td>
             <td><a class="btn-detail" href="invoice_detail.php?id=<?= (int)$inv['id'] ?>">Detail</a></td>
           </tr>

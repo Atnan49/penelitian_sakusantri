@@ -32,18 +32,18 @@ $currentSaldo = wallet_balance($conn,$userId);
 
 require_once __DIR__.'/../../src/includes/header.php';
 ?>
-<main class="container" style="padding-bottom:60px">
-  <a href="invoice.php" style="text-decoration:none;font-size:12px;color:#555">&larr; Kembali</a>
-  <h1 style="margin:8px 0 20px;font-size:26px">Riwayat Wallet</h1>
-  <div class="panel" style="margin-bottom:24px">
-    <h2 style="margin:0 0 12px;font-size:18px">Saldo Saat Ini</h2>
-    <div style="font-size:30px;font-weight:700;color:#2e6d4b">Rp <?= number_format($currentSaldo,0,',','.') ?></div>
-  <div style="font-size:11px;color:#666;margin-top:6px">Halaman <?php echo $page; ?> / <?php echo $totalPages; ?>, <?php echo $perPage; ?> entri per halaman. Opening balance halaman ini: Rp <?php echo number_format($opening,0,',','.'); ?>.</div>
+<div class="wallet-page">
+  <a class="back-link" href="invoice.php">&larr; Kembali</a>
+  <h1 class="wallet-title">Riwayat Wallet</h1>
+  <div class="panel wallet-balance">
+    <h2>Saldo Saat Ini</h2>
+    <div class="wallet-balance-amount">Rp <?= number_format($currentSaldo,0,',','.') ?></div>
+    <div class="wallet-balance-meta">Halaman <?php echo $page; ?> / <?php echo $totalPages; ?>, <?php echo $perPage; ?> entri per halaman. Opening balance halaman ini: Rp <?php echo number_format($opening,0,',','.'); ?>.</div>
   </div>
-  <div class="panel">
-    <h2 style="margin:0 0 14px;font-size:18px">Ledger WALLET</h2>
-    <div class="table-wrap wallet-table-desktop" style="overflow-x:auto">
-      <table class="table" style="min-width:760px">
+  <div class="panel wallet-history">
+    <h2>Riwayat Wallet</h2>
+    <div class="table-wrap wallet-table-desktop">
+      <table class="table table-compact">
         <thead><tr><th>ID</th><th>Tanggal</th><th>Debit</th><th>Credit</th><th>Saldo</th><th>Referensi</th><th>Catatan</th></tr></thead>
         <tbody>
         <?php if(!$rows): ?>
@@ -67,8 +67,8 @@ require_once __DIR__.'/../../src/includes/header.php';
       </table>
     </div>
 
-    <!-- Mobile Card List -->
-    <div class="wallet-mobile-list">
+  <!-- Mobile Card List -->
+  <div class="wallet-mobile-list">
       <?php if(!$rows): ?>
         <div class="wallet-entry-mobile" style="text-align:center;color:#777;font-size:12px">Belum ada entri wallet.</div>
       <?php else: foreach($rows as $r): ?>
@@ -90,7 +90,7 @@ require_once __DIR__.'/../../src/includes/header.php';
       <?php endforeach; endif; ?>
     </div>
     <?php if($totalPages>1): ?>
-    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;font-size:12px">
+    <div class="page-nav" style="margin-top:14px">
       <?php if($page>1): ?><a class="btn-action outline" href="?p=<?php echo $page-1; ?>">&larr; Prev</a><?php endif; ?>
       <?php if($page < $totalPages): ?><a class="btn-action outline" href="?p=<?php echo $page+1; ?>">Next &rarr;</a><?php endif; ?>
       <span style="padding:6px 8px;color:#555">Goto:
@@ -101,7 +101,7 @@ require_once __DIR__.'/../../src/includes/header.php';
     </div>
     <?php endif; ?>
   </div>
-</main>
+</div>
 <script>
 (function(){
   const uid = <?php echo (int)$userId; ?>;

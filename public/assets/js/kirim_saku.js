@@ -3,11 +3,13 @@
     // Currency formatting for step 1
     const amtHidden = document.getElementById('jumlah');
     const amtDisplay = document.getElementById('jumlahDisplay');
+    const form = document.getElementById('topupAmountForm');
+    const jumlahErr = document.getElementById('jumlahError');
     function onlyDigits(s){return (s||'').replace(/[^0-9]/g,'');}
     function rupiah(n){try{return 'Rp ' + Number(n).toLocaleString('id-ID');}catch(e){return 'Rp ' + n;}}
     if(amtDisplay && amtHidden){
         let lastRaw='';
-        function formatNow(){
+    function formatNow(){
             const caretPos = amtDisplay.selectionStart;
             const beforeLen = amtDisplay.value.length;
             const raw=onlyDigits(amtDisplay.value);
@@ -24,11 +26,28 @@
         amtDisplay.addEventListener('blur',formatNow);
         formatNow();
     }
-    // Debug: tampilkan value hidden saat submit
-    const form = document.querySelector('.topup-form');
+    // Pastikan nilai tersembunyi terisi & validasi minimum sebelum submit
     if(form && amtHidden){
         form.addEventListener('submit',function(e){
-            console.log('DEBUG: jumlah (hidden) =', amtHidden.value, 'jumlahDisplay =', amtDisplay.value);
+            // Sync latest value
+            if(amtDisplay){
+                const raw=onlyDigits(amtDisplay.value);
+                amtHidden.value = raw || 0;
+            }
+            const val = parseInt(amtHidden.value||'0',10);
+            if(!val || val<=0){
+                e.preventDefault();
+                if(jumlahErr){ jumlahErr.textContent='Masukkan nominal top-up.'; }
+                amtDisplay?.focus();
+                return;
+            }
+            if(val<10000){
+                e.preventDefault();
+                if(jumlahErr){ jumlahErr.textContent='Minimal top-up Rp 10.000.'; }
+                amtDisplay?.focus();
+                return;
+            }
+            if(jumlahErr){ jumlahErr.textContent=''; }
         });
     }
     // Drag & drop style for upload step

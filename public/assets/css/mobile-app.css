@@ -7,7 +7,7 @@
 
   /* Sidebar menjadi overlay + tombol toggle */
   .main-menu{position:fixed;top:0;left:0;bottom:0;width:240px;max-width:240px;transform:translateX(-100%);transition:transform .28s ease;background:var(--admin-green)!important;z-index:900;padding:60px 12px 70px;box-shadow:2px 0 18px -6px rgba(0,0,0,.35)}
-  .main-menu.open{transform:translateX(0)}
+  body.menu-open .main-menu{transform:translateX(0)}
   .main-menu .btn-menu{margin:2px 0;padding:9px 12px;font-size:12.5px}
   .main-menu .btn-menu .mi{font-size:17px}
   .main-menu .btn-danger{margin-top:14px}

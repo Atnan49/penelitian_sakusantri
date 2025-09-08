@@ -36,6 +36,27 @@ if(!headers_sent()){
   $faviconAbs = BASE_PATH.'/public/'.$faviconRel;
   $icoCandidate = 'favicon.ico'; // optional manual placement by user
   $favVersion = file_exists($faviconAbs) ? filemtime($faviconAbs) : time();
+    // Generate inline data URI favicon (force override browser cache of localhost default)
+    $inlineFavicon = '';
+    $logoPath = $faviconAbs;
+    if(file_exists($logoPath)){
+      if(function_exists('imagecreatefrompng')){
+        $src = @imagecreatefrompng($logoPath);
+        if($src){
+          $tw = 64; $th = 64; $w = imagesx($src); $h = imagesy($src);
+          $dst = imagecreatetruecolor($tw,$th);
+          imagesavealpha($dst,true); $trans = imagecolorallocatealpha($dst,0,0,0,127); imagefill($dst,0,0,$trans);
+            imagecopyresampled($dst,$src,0,0,0,0,$tw,$th,$w,$h);
+            ob_start(); imagepng($dst); $pngData = ob_get_clean();
+            imagedestroy($dst); imagedestroy($src);
+            if($pngData){ $inlineFavicon = 'data:image/png;base64,'.base64_encode($pngData); }
+        }
+      }
+      if(!$inlineFavicon){ // fallback raw file
+        $raw = @file_get_contents($logoPath);
+        if($raw){ $inlineFavicon = 'data:image/png;base64,'.base64_encode($raw); }
+      }
+    }
     $baseTitle = 'Saku Santri';
     if(!empty($PAGE_TITLE) && strcasecmp(trim($PAGE_TITLE),$baseTitle)!==0){
       $fullTitle = trim($PAGE_TITLE).' – '.$baseTitle;
@@ -50,14 +71,19 @@ if(!headers_sent()){
   <?php if(file_exists(BASE_PATH.'/public/'.$icoCandidate)): ?>
     <link rel="icon" type="image/x-icon" href="<?= url($icoCandidate).$fv ?>" />
   <?php endif; ?>
+  <?php if($inlineFavicon): // Inline variant to aggressively override cached default ?>
+    <link rel="icon" type="image/png" href="<?= e($inlineFavicon) ?>" />
+  <?php endif; ?>
   <meta property="og:image" content="<?= url($brandLogoRel) ?>" />
   <link rel="stylesheet" href="<?php echo url("assets/css/style.css"); ?>?v=20250826a">
   <?php if (empty($_SESSION['role'])): ?>
   <link rel="stylesheet" href="<?php echo url('assets/css/auth.css'); ?>?v=20250825g">
   <link rel="stylesheet" href="<?php echo url('assets/css/mobile-login.css'); ?>?v=20250827a" media="(max-width: 860px)">
   <?php else: ?>
-    <link rel="stylesheet" href="<?php echo url('assets/css/mobile-app.css'); ?>?v=20250827a" media="(max-width: 860px)">
+  <link rel="stylesheet" href="<?php echo url('assets/css/mobile-app.css'); ?>?v=20250906b" media="(max-width: 860px)">
   <?php endif; ?>
+  <!-- UI overrides loaded last to safely refine base styles -->
+  <link rel="stylesheet" href="<?php echo url('assets/css/override.css'); ?>?v=20250906i">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,500,0,0" />
   <meta name="application-name" content="Saku Santri" />
   <meta name="apple-mobile-web-app-title" content="Saku Santri" />
@@ -110,7 +136,7 @@ if(!headers_sent()){
       <?php if (isset($_SESSION["nama_wali"])): ?>
         <span class="hello">Halo, <?php echo e($_SESSION["nama_wali"]); ?>!</span>
         <?php if ($role !== "admin"): ?>
-          <a class="link-logout" href="<?php echo url("logout"); ?>">Logout</a>
+          <a class="link-logout" href="<?php echo url("logout"); ?>">Keluar</a>
         <?php endif; ?>
       <?php endif; ?>
         <?php
@@ -144,15 +170,15 @@ if(!headers_sent()){
     <div class="greet-wrap"><span class="hi">Hi, Selamat Datang</span><span class="role">ADMIN</span></div>
   </div>
   <a class="btn-menu<?php echo $isActive('/admin/'); ?>" href="<?php echo url("admin/"); ?>"><span class="mi material-symbols-outlined">home</span> Beranda</a>
-  <a class="btn-menu<?php echo $isActive('/admin/invoice.php'); ?>" href="<?php echo url("admin/invoice.php"); ?>"><span class="mi material-symbols-outlined">request_quote</span> Invoice</a>
-  <a class="btn-menu<?php echo $isActive('/admin/generate_spp'); ?>" href="<?php echo url("admin/generate_spp.php"); ?>"><span class="mi material-symbols-outlined">playlist_add</span> Generate SPP</a>
-  <a class="btn-menu<?php echo $isActive('/admin/wallet_topups'); ?>" href="<?php echo url("admin/wallet_topups.php"); ?>"><span class="mi material-symbols-outlined">account_balance_wallet</span> Top-Up Wallet</a>
+  <a class="btn-menu<?php echo $isActive('/admin/invoice.php'); ?>" href="<?php echo url("admin/invoice.php"); ?>"><span class="mi material-symbols-outlined">request_quote</span> Tagihan</a>
+  <a class="btn-menu<?php echo $isActive('/admin/generate_spp'); ?>" href="<?php echo url("admin/generate_spp.php"); ?>"><span class="mi material-symbols-outlined">playlist_add</span> Buat SPP</a>
+  <a class="btn-menu<?php echo $isActive('/admin/wallet_topups'); ?>" href="<?php echo url("admin/wallet_topups.php"); ?>"><span class="mi material-symbols-outlined">account_balance_wallet</span> Isi Saldo Dompet</a>
   <a class="btn-menu<?php echo $isActive('/admin/pengguna.php'); ?>" href="<?php echo url("admin/pengguna.php"); ?>"><span class="mi material-symbols-outlined">group</span> Pengguna</a>
   <a class="btn-menu<?php echo $isActive('/admin/kelola_user.php'); ?>" href="<?php echo url("admin/kelola_user.php"); ?>"><span class="mi material-symbols-outlined">group_add</span> Kelola Pengguna</a>
   <a class="btn-menu<?php echo $isActive('/kasir/transaksi'); ?>" href="<?php echo url('kasir/transaksi'); ?>"><span class="mi material-symbols-outlined">point_of_sale</span> Kasir Koperasi</a>
   <a class="btn-menu<?php echo $isActive('/admin/notifikasi.php'); ?>" href="<?php echo url('admin/notifikasi.php'); ?>"><span class="mi material-symbols-outlined">notifications</span> Notifikasi<?php if($unreadNotifCount>0){ echo ' <span class="notif-badge">'.$unreadNotifCount.'</span>'; } ?></a>
-  <a class="btn-menu<?php echo $isActive('/admin/integrity_report'); ?>" href="<?php echo url('admin/integrity_report.php'); ?>"><span class="mi material-symbols-outlined">inventory</span> Integrity</a>
-  <a class="btn-menu btn-danger" href="<?php echo url("logout"); ?>"><span class="mi material-symbols-outlined" style="font-size:18px">logout</span> LOGOUT</a>
+  <a class="btn-menu<?php echo $isActive('/admin/integrity_report'); ?>" href="<?php echo url('admin/integrity_report.php'); ?>"><span class="mi material-symbols-outlined">inventory</span> Integritas</a>
+  <a class="btn-menu btn-danger" href="<?php echo url("logout"); ?>"><span class="mi material-symbols-outlined" style="font-size:18px">logout</span> KELUAR</a>
 </nav>
 <?php elseif ($role === "wali_santri"): ?>
 <?php
@@ -180,13 +206,13 @@ if(!headers_sent()){
     </div>
   </div>
   <a class="btn-menu<?php echo $isActive('/wali/'); ?>" href="<?php echo url("wali/"); ?>"><span class="mi material-symbols-outlined">home</span> Beranda</a>
-  <a class="btn-menu<?php echo $isActive('/wali/kirim_saku.php'); ?>" href="<?php echo url("wali/kirim_saku.php"); ?>"><span class="mi material-symbols-outlined">account_balance_wallet</span> Top-Up</a>
-  <a class="btn-menu<?php echo $isActive('/wali/wallet_riwayat.php'); ?>" href="<?php echo url("wali/wallet_riwayat.php"); ?>"><span class="mi material-symbols-outlined">account_balance</span> Riwayat Wallet</a>
+  <a class="btn-menu<?php echo $isActive('/wali/kirim_saku.php'); ?>" href="<?php echo url("wali/kirim_saku.php"); ?>"><span class="mi material-symbols-outlined">account_balance_wallet</span> Isi Saldo</a>
+  <a class="btn-menu<?php echo $isActive('/wali/wallet_riwayat.php'); ?>" href="<?php echo url("wali/wallet_riwayat.php"); ?>"><span class="mi material-symbols-outlined">account_balance</span> Riwayat Dompet</a>
   <a class="btn-menu<?php echo $isActive('/wali/invoice.php'); ?>" href="<?php echo url("wali/invoice.php"); ?>"><span class="mi material-symbols-outlined">request_quote</span> Tagihan SPP</a>
   <a class="btn-menu<?php echo $isActive('/wali/notifikasi.php'); ?>" href="<?php echo url("wali/notifikasi.php"); ?>"><span class="mi material-symbols-outlined">notifications</span> Notifikasi<?php if($unreadNotifCountWali>0){ echo ' <span class="notif-badge">'.$unreadNotifCountWali.'</span>'; } ?></a>
-  <a class="btn-menu<?php echo $isActive('/wali/ubah_password'); ?>" href="<?php echo url("wali/ubah_password.php"); ?>"><span class="mi material-symbols-outlined">lock_reset</span> Ubah Password</a>
+  <a class="btn-menu<?php echo $isActive('/wali/ubah_password'); ?>" href="<?php echo url("wali/ubah_password.php"); ?>"><span class="mi material-symbols-outlined">lock_reset</span> Ubah Kata Sandi</a>
   <div class="wali-spacer"></div>
-  <a class="btn-menu btn-danger" href="<?php echo url("logout"); ?>"><span class="mi material-symbols-outlined" style="font-size:18px">logout</span> LOGOUT</a>
+  <a class="btn-menu btn-danger" href="<?php echo url("logout"); ?>"><span class="mi material-symbols-outlined" style="font-size:18px">logout</span> KELUAR</a>
 </nav>
 <?php endif; ?>
 <main id="mainContent" class="container">

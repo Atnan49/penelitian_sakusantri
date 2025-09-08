@@ -5,6 +5,8 @@ RewriteCond %{HTTP_HOST} !^localhost(:\d+)?$ [NC]
 RewriteCond %{HTTP_HOST} !^127\.0\.0\.1(:\d+)?$ [NC]
 RewriteCond %{HTTP_HOST} !^192\.168\..+$ [NC]
 RewriteCond %{HTTP_HOST} !^10\..+$ [NC]
+# Tambah pengecualian IP private kelas B 172.16.0.0 - 172.31.255.255 (RFC1918)
+RewriteCond %{HTTP_HOST} !^172\.(1[6-9]|2[0-9]|3[0-1])\..+$ [NC]
 
 # Force HTTPS (consider reverse proxy)
 RewriteCond %{HTTPS} !=on

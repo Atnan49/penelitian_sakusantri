@@ -65,8 +65,8 @@
   let lastReq=0; let t=null;
   function preview(){
     const y=year.value; const curType=typeSel?typeSel.value:'spp';
-    const m = curType==='spp' ? month.value : '';
-    if(!y || (curType==='spp' && !m)){ if(pvStatus) pvStatus.textContent='Periode belum lengkap'; return;}
+  const m = (curType==='spp' || curType==='beasiswa') ? month.value : '';
+  if(!y || ((curType==='spp' || curType==='beasiswa') && !m)){ if(pvStatus) pvStatus.textContent='Periode belum lengkap'; return;}
     const started=++lastReq; if(pvStatus) pvStatus.textContent='Memuat...';
     const url = `generate_spp.php?preview=1&type=${encodeURIComponent(curType)}&year=${encodeURIComponent(y)}&month=${encodeURIComponent(m||'')}`;
     fetch(url,{headers:{'Accept':'application/json'}})
@@ -87,12 +87,12 @@
       .catch(()=>{ if(started!==lastReq) return; if(pvStatus) pvStatus.textContent='Gagal ambil preview'; btnGen.disabled=false; });
   }
   function schedule(){ if(t) clearTimeout(t); t=setTimeout(preview,250); }
-  year.addEventListener('change',()=>{ if(autoEnd.checked && typeSel.value==='spp') setEndMonth(); schedule(); });
-  if(month) month.addEventListener('change',()=>{ if(autoEnd.checked && typeSel.value==='spp') setEndMonth(); schedule(); });
+  year.addEventListener('change',()=>{ if(autoEnd.checked && (typeSel.value==='spp'||typeSel.value==='beasiswa')) setEndMonth(); schedule(); });
+  if(month) month.addEventListener('change',()=>{ if(autoEnd.checked && (typeSel.value==='spp'||typeSel.value==='beasiswa')) setEndMonth(); schedule(); });
   if(typeSel){
     typeSel.addEventListener('change',()=>{
       const t=typeSel.value;
-      if(t==='spp'){
+      if(t==='spp' || t==='beasiswa'){
         monthWrap.style.display='';
         month.setAttribute('required','required');
         if(autoEnd.checked) setEndMonth();
@@ -109,4 +109,29 @@
   document.querySelector('.btn-end-month')?.addEventListener('click',()=>{ setEndMonth(); autoEnd.checked=false; });
   document.querySelector('.btn-plus7')?.addEventListener('click',()=>{ const base = due.value? new Date(due.value): new Date(); base.setDate(base.getDate()+7); due.value=base.toISOString().slice(0,10); autoEnd.checked=false; });
   autoEnd.addEventListener('change',()=>{ if(autoEnd.checked && (!typeSel || typeSel.value==='spp')) setEndMonth(); }); if(autoEnd.checked && (!typeSel || typeSel.value==='spp')) setEndMonth(); schedule();
+})();
+
+// Single-user form enhancements
+(function(){
+  const year=document.getElementById('yearSelSingle');
+  const month=document.getElementById('monthSelSingle');
+  const typeSel=document.getElementById('typeSelSingle');
+  const monthWrap=document.getElementById('monthWrapSingle');
+  const dAmt=document.getElementById('amountDisplaySingle');
+  const rAmt=document.getElementById('amountRawSingle');
+  const due=document.getElementById('dueDateInputSingle');
+  const autoEnd=document.getElementById('autoEndSingle');
+  function onlyDigits(s){return (s||'').replace(/[^0-9]/g,'');}
+  function fmt(n){return 'Rp '+(Number(n)||0).toLocaleString('id-ID');}
+  function syncAmount(){ const v=parseInt(onlyDigits(dAmt.value),10)||0; rAmt.value=v; dAmt.value=v?fmt(v):''; }
+  function setEndMonth(){ const y=parseInt(year.value,10); const m=parseInt(month.value,10); if(!y||!m) return; const last=new Date(y,m,0).getDate(); due.value=`${y}-${String(m).padStart(2,'0')}-${String(last).padStart(2,'0')}`; }
+  if(dAmt&&rAmt){ dAmt.addEventListener('input',syncAmount); dAmt.addEventListener('blur',syncAmount); syncAmount(); }
+  if(typeSel && monthWrap && month){
+    typeSel.addEventListener('change',()=>{
+      const t=typeSel.value;
+      if(t==='spp' || t==='beasiswa'){ monthWrap.style.display=''; month.setAttribute('required','required'); if(autoEnd?.checked) setEndMonth(); }
+      else { monthWrap.style.display='none'; month.removeAttribute('required'); due.value = year.value+'-07-15'; }
+    });
+  }
+  if(autoEnd){ autoEnd.addEventListener('change',()=>{ if(autoEnd.checked && (!typeSel || typeSel.value==='spp' || typeSel.value==='beasiswa')) setEndMonth(); }); if(autoEnd.checked && (!typeSel || typeSel.value==='spp' || typeSel.value==='beasiswa')) setEndMonth(); }
 })();

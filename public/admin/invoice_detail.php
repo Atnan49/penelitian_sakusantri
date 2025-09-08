@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../src/includes/init.php';
 require_once __DIR__ . '/../includes/session_check.php';
 require_role('admin');
 require_once BASE_PATH.'/src/includes/payments.php';
+require_once BASE_PATH.'/src/includes/status_helpers.php';
 $iid = (int)($_GET['id'] ?? 0);
 if(!$iid){ header('Location: invoice.php'); exit; }
 // Fetch invoice with user
@@ -76,7 +77,7 @@ require_once BASE_PATH.'/src/includes/header.php';
   <div class="invoice-content">
     <header class="invoice-header">
       <a href="invoice.php" class="back-link">&larr; Kembali</a>
-      <h1>Invoice #<?= (int)$inv['id'] ?></h1>
+  <h1>Tagihan #<?= (int)$inv['id'] ?></h1>
     </header>
 
     <?php if($msg): ?><div class="alert success">✅ <?= e($msg) ?></div><?php endif; ?>
@@ -94,13 +95,13 @@ require_once BASE_PATH.'/src/includes/header.php';
 
     <section class="invoice-summary">
       <div class="summary-card">
-        <h2>Data Invoice</h2>
+  <h2>Data Tagihan</h2>
         <ul>
           <li><strong>Santri:</strong> <?= e($inv['nama_santri']) ?></li>
           <li><strong>Wali:</strong> <?= e($inv['nama_wali']) ?></li>
           <li><strong>Periode:</strong> <?= e($inv['period']) ?></li>
           <li><strong>Nominal:</strong> Rp <?= number_format($inv['amount'],0,',','.') ?></li>
-          <li><strong>Status:</strong> <span class="status-<?= e($inv['status']) ?>"><?= e($inv['status']) ?></span></li>
+          <li><strong>Status:</strong> <span class="status-<?= e($inv['status']) ?>"><?= e(t_status_invoice($inv['status'])) ?></span></li>
         </ul>
       </div>
     </section>
@@ -128,7 +129,7 @@ require_once BASE_PATH.'/src/includes/header.php';
                 <td>#<?= (int)$p['id'] ?></td>
                 <td><?= e($p['method']) ?></td>
                 <td>Rp <?= number_format($p['amount'],0,',','.') ?></td>
-                <td><span class="status-<?= e($p['status']) ?>"><?= e($p['status']) ?></span></td>
+                <td><span class="status-<?= e($p['status']) ?>"><?= e(t_status_payment($p['status'])) ?></span></td>
                 <td><?= e($p['created_at']) ?></td>
                 <td>
                   <?php if(!empty($p['proof_file'])): ?>

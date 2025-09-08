@@ -10,7 +10,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // Ambil input dari form dengan default kosong jika tidak ada
-$nisn = $_POST['nisn'] ?? '';
+$nisn_raw = $_POST['nisn'] ?? '';
+// Izinkan huruf, angka, titik, underscore, dash
+$nisn = preg_replace('/[^A-Za-z0-9._-]/','', (string)$nisn_raw);
+if(strlen($nisn) < 3){ header('Location: ' . url('login?pesan=gagal')); exit(); }
 $password = $_POST['password'] ?? '';
 // Validasi panjang password minimal 8 karakter (server-side)
 if(strlen($password) < 8){
