@@ -33,7 +33,7 @@ body.auth-mode {
 .brand-header { position:absolute; top:40px; left:40px; z-index:10; }
 .brand-logo { display:flex; align-items:center; gap:12px; }
 .logo-icon { width:48px; height:48px; object-fit:contain; display:block; }
-.partner-icon{ width:48px; height:48px; max-width:48px; max-height:48px; object-fit:contain; display:block; align-self:center; filter:drop-shadow(0 1px 2px rgba(0,0,0,.15)); position:relative; top:-8px; }
+.partner-icon{ width:48px; height:48px; max-width:48px; max-height:48px; object-fit:contain; display:block; align-self:center; filter:drop-shadow(0 1px 2px rgba(0,0,0,.15)); position:relative; top:-12px; }
 .brand-text { font-size:28px; font-weight:700; color:#2c2c2c; letter-spacing:.5px; }
 
 /* Mobile Header */
