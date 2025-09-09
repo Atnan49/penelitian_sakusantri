@@ -35,10 +35,10 @@ require_once __DIR__ . "/../src/includes/header.php";
         $himatifRel = null; $hv='';
         foreach($himatifCandidates as $rel){ $abs = BASE_PATH.'/public/'.$rel; if(file_exists($abs)){ $himatifRel = $rel; $hv='?v='.filemtime($abs); break; } }
       ?>
-      <img src="<?php echo url('assets/img/logo.png'); ?>" alt="SakuSantri" class="logo-icon js-hide-on-error">
       <?php if($himatifRel): ?>
         <img src="<?php echo url($himatifRel).$hv; ?>" alt="HIMATIF" title="HIMATIF" class="partner-icon js-hide-on-error" width="38" height="38" />
       <?php endif; ?>
+      <img src="<?php echo url('assets/img/logo.png'); ?>" alt="SakuSantri" class="logo-icon js-hide-on-error">
       <span class="brand-text">SakuSantri</span>
     </div>
   </div>
@@ -47,10 +47,10 @@ require_once __DIR__ . "/../src/includes/header.php";
   <div class="mobile-header">
     <div class="mobile-logo">
       <div class="mobile-logo-row">
-        <img src="<?php echo url('assets/img/logo.png'); ?>" alt="SakuSantri" class="logo-mobile js-hide-on-error">
         <?php if(isset($himatifRel) && $himatifRel): ?>
           <img src="<?php echo url($himatifRel).$hv; ?>" alt="HIMATIF" title="HIMATIF" class="partner-mobile js-hide-on-error" width="48" height="48" />
         <?php endif; ?>
+        <img src="<?php echo url('assets/img/logo.png'); ?>" alt="SakuSantri" class="logo-mobile js-hide-on-error">
       </div>
       <span class="brand-mobile">SakuSantri</span>
     </div>
